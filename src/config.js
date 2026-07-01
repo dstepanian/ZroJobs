@@ -1,0 +1,17 @@
+import 'dotenv/config';
+
+const config = {
+  token: process.env.TELEGRAM_BOT_TOKEN,
+  channel: process.env.TELEGRAM_CHANNEL,
+  geminiKey: process.env.GEMINI_API_KEY,
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  channelHandle: process.env.CHANNEL_HANDLE || process.env.TELEGRAM_CHANNEL || '',
+  promoContact: process.env.PROMO_CONTACT || '',
+  digestMin: Number(process.env.DIGEST_MIN || 5),
+  digestMax: Number(process.env.DIGEST_MAX || 10),
+  // CLI flags
+  dry: process.argv.includes('--dry'),
+  print: process.argv.includes('--print'),
+};
+
+export default config;

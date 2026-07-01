@@ -1,0 +1,16 @@
+{
+  "name": "zrojobs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Armenian tech-jobs digest bot — staff.am + Telegram channels + Gemini Flash, posted daily to Telegram.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dry": "node src/index.js --dry",
+    "preview": "node src/index.js --dry --print"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}
