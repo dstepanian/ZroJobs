@@ -10,12 +10,15 @@ const describe = (job, n) => {
     job.location && `Location: ${job.location}`,
     job.remote && 'Remote-friendly',
     job.category && `Category: ${job.category}`,
-    job.text && `Post text: ${job.text}`,
+    job.text && `Post text: ${job.text.slice(0, 600)}`,
   ].filter(Boolean);
   return bits.join(' | ');
 };
 
-const buildPrompt = (jobs, min, max) => `
+// ---- Pass 1: pick the best tech jobs (no summaries yet — the picked jobs get
+// enriched with detail-page text first, then summarized in pass 2). ----
+
+const buildPickPrompt = (jobs, min, max) => `
 You are the editor of a daily Armenian tech-jobs digest on Telegram.
 Below are ${jobs.length} candidate postings scraped from job boards and Telegram
 channels (mixed Armenian/English/Russian, mixed quality, some are not tech jobs).
@@ -37,9 +40,6 @@ Your job:
    - "company": company name as written, or "" if genuinely unknown.
    - "location": city in Armenian (e.g. "Երևան"), or "Հեռավար" if remote-only, or "".
    - "tag": one of ${TAGS.join(', ')}.
-   - "summaryHy": ONE short line in Eastern Armenian with the essentials a job-seeker
-     scans for: stack/skills, seniority, remote option, salary if stated. Keep
-     technology names in English (React, Node.js, Python). No fluff.
 
 Return ONLY JSON matching the schema. No markdown, no commentary.
 
@@ -47,7 +47,7 @@ Candidates:
 ${jobs.map(describe).join('\n')}
 `.trim();
 
-const schema = {
+const pickSchema = {
   type: 'object',
   properties: {
     items: {
@@ -60,36 +60,80 @@ const schema = {
           company: { type: 'string' },
           location: { type: 'string' },
           tag: { type: 'string', enum: TAGS },
-          summaryHy: { type: 'string' },
         },
-        required: ['index', 'title', 'tag', 'summaryHy'],
+        required: ['index', 'title', 'tag'],
       },
     },
   },
   required: ['items'],
 };
 
-// Returns curated [{ title, company, location, tag, summaryHy, url, source }].
+// Returns curated [{ id, title, company, location, tag, url, source, ... }].
 // Throws on failure so the caller can fall back to an uncurated list.
 export const curate = async (jobs) => {
   if (!jobs.length) return [];
-  const parsed = await generateJson(buildPrompt(jobs, config.digestMin, config.digestMax), schema);
+  const parsed = await generateJson(buildPickPrompt(jobs, config.digestMin, config.digestMax), pickSchema);
   return (Array.isArray(parsed.items) ? parsed.items : [])
     .slice(0, config.digestMax)
-    .map(({ index, title, company, location, tag, summaryHy }) => {
+    .map(({ index, title, company, location, tag }) => {
       // Gemini returns a 1-based index into the numbered candidate list.
       const raw = jobs[index - 1];
       if (!raw) return null;
       return {
-        id: raw.id,
+        ...raw,
         title: (title || raw.title).trim(),
         company: (company ?? raw.company ?? '').trim(),
         location: (location ?? raw.location ?? '').trim(),
         tag,
-        summaryHy: (summaryHy || '').trim(),
-        url: raw.url,
-        source: raw.source,
       };
     })
     .filter(Boolean);
+};
+
+// ---- Pass 2: one-line Armenian summaries from the enriched detail text. ----
+
+const buildSummaryPrompt = (jobs) => `
+You write one-line summaries for a tech-jobs Telegram digest in Eastern Armenian.
+For each numbered job below, write "summaryHy": ONE short line with what a
+job-seeker scans for — tech stack, years of experience required, and standout
+conditions (flexible hours, relocation, equity...). Keep technology names in
+English (React, Node.js, Python). No fluff, no restating the obvious.
+
+Do NOT mention the title, company, location, salary or deadline — the digest
+shows those separately. If the details add nothing beyond the title, return ""
+for that job.
+
+Return ONLY JSON matching the schema. No markdown, no commentary.
+
+Jobs:
+${jobs.map((j, n) => `${n + 1}. ${j.title} @ ${j.company || '?'}\n${(j.text || '').slice(0, 1200) || '(no details)'}`).join('\n---\n')}
+`.trim();
+
+const summarySchema = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'integer' },
+          summaryHy: { type: 'string' },
+        },
+        required: ['index', 'summaryHy'],
+      },
+    },
+  },
+  required: ['items'],
+};
+
+// Mutates nothing; returns the jobs with summaryHy attached where Gemini had
+// something to say. Callers treat a failure as "no summaries".
+export const summarize = async (jobs) => {
+  if (!jobs.length) return jobs;
+  const parsed = await generateJson(buildSummaryPrompt(jobs), summarySchema);
+  const byIndex = new Map(
+    (Array.isArray(parsed.items) ? parsed.items : []).map((it) => [it.index, (it.summaryHy || '').trim()]),
+  );
+  return jobs.map((j, n) => ({ ...j, summaryHy: byIndex.get(n + 1) || '' }));
 };

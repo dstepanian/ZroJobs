@@ -49,12 +49,28 @@ export const loadFeatured = () => {
   }
 };
 
-// One job entry: title line + one-line Armenian summary with the apply link.
-const jobBlock = ({ title, company, location, remote, tag, summaryHy, url }, marker) => {
+// "2026-07-31" -> "մինչև հուլիսի 31-ը", but only when the deadline is close
+// enough to be an urgency signal rather than noise.
+const DEADLINE_SOON_DAYS = 14;
+const fmtDeadline = (iso) => {
+  if (!iso) return '';
+  const days = (Date.parse(iso) - Date.now()) / (24 * 60 * 60 * 1000);
+  if (!(days >= 0 && days <= DEADLINE_SOON_DAYS)) return '';
+  const [, m, d] = iso.split('-').map(Number);
+  return `մինչև ${MONTHS_HY[m - 1]} ${d}-ը`;
+};
+
+// One job entry: title line, then a detail line with salary, one-line Armenian
+// summary, near deadlines and the apply link.
+const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, deadline, url }, marker) => {
   const who = [company, location || (remote ? 'Հեռավար' : '')].filter(Boolean).join(' · ');
   const head = `${marker} <b>${esc(title)}</b>${who ? ` — ${esc(who)}` : ''}`;
-  const tail = [summaryHy && esc(summaryHy), url && `<a href="${esc(url)}">Դիտել →</a>`]
-    .filter(Boolean).join(' · ');
+  const tail = [
+    salary && `💰 ${esc(salary)}`,
+    summaryHy && esc(summaryHy),
+    fmtDeadline(deadline),
+    url && `<a href="${esc(url)}">Դիտել →</a>`,
+  ].filter(Boolean).join(' · ');
   return tail ? `${head}\n      ${tail}` : head;
 };
 

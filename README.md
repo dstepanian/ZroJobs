@@ -7,10 +7,10 @@ then posts one clean bilingual digest to a Telegram channel. Free to run — no
 server, GitHub Actions cron does the scheduling.
 
 ```
-staff.am (IT cats) ─┐
-t.me/s/<channels>  ─┴─▶ aggregate ─▶ Gemini curate ─▶ format ─▶ Telegram (1 digest/day)
-                        (new only,    (tech only,      (HY/EN)
-                         seen.json)    5-10 best)
+staff.am (IT cats) ─┐                                enrich picks
+t.me/s/<channels>  ─┴─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
+                        (new only,    (tech only,    salary, descr.,   summarize   (HY/EN)  (1/day)
+                         seen.json)    5-10 best)     deadline)        (one HY line)
 ```
 
 ## Setup
@@ -78,13 +78,14 @@ variable (e.g. `@yourusername`) to advertise the option in the digest footer.
 | File | Role |
 |------|------|
 | `src/sources.js` | staff.am category ids + Telegram channel list |
-| `src/scrape/staffam.js` | staff.am `__NEXT_DATA__` scraper |
+| `src/scrape/staffam.js` | staff.am `__NEXT_DATA__` scraper — listing + detail enrichment (salary, description, deadline) |
 | `src/scrape/telegram.js` | generic `t.me/s/` channel scraper |
+| `src/text.js` | shared HTML-to-text helper |
 | `src/fetchJobs.js` | parallel fetch, fail-soft per source |
 | `src/aggregate.js` | 7-day window, drop seen, dedupe, cap |
 | `src/seen.js` | `seen.json` load/mark/prune (30 days) |
 | `src/gemini.js` | shared Gemini JSON call (model fallback chain) |
-| `src/curate.js` | Gemini prompt — tech filter, dedupe, HY summaries |
-| `src/format.js` | bilingual digest + featured listings |
+| `src/curate.js` | Gemini pass 1 (pick/tag/translate) + pass 2 (HY summaries from detail text) |
+| `src/format.js` | bilingual digest — salary 💰, near deadlines, featured listings |
 | `src/post.js` | Telegram Bot API send |
 | `src/index.js` | orchestrate the daily run |

@@ -1,20 +1,10 @@
+import { stripHtml } from '../text.js';
+
 // Scrape a public Telegram channel through its t.me/s/<name> preview page —
 // server-rendered HTML, no bot membership or API auth needed. Returns the last
 // ~20 posts; the aggregate window + seen.json take care of the rest.
 
 const UA = 'Mozilla/5.0 (compatible; zrojobs/1.0; +https://t.me/zrojobs)';
-
-const stripHtml = (s = '') =>
-  s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 
 export const fetchTelegramChannel = async (channel) => {
   const res = await fetch(`https://t.me/s/${channel}`, {

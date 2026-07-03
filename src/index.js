@@ -1,9 +1,23 @@
 import config from './config.js';
 import { aggregate } from './aggregate.js';
-import { curate } from './curate.js';
+import { curate, summarize } from './curate.js';
+import { enrichStaffAmJob } from './scrape/staffam.js';
 import { formatDigest, yerevanISO } from './format.js';
 import { postToTelegram } from './post.js';
 import { markSeen } from './seen.js';
+
+// Fetch detail pages for the picked staff.am jobs only (~10 requests, polite):
+// full description for the summarizer, salary/deadline for the digest itself.
+const enrich = (jobs) =>
+  Promise.all(jobs.map(async (job) => {
+    if (!job.id.startsWith('staffam:')) return job;
+    try {
+      return await enrichStaffAmJob(job);
+    } catch (e) {
+      console.warn(`[zrojobs] detail fetch failed for ${job.id}: ${e.message}`);
+      return job;
+    }
+  }));
 
 const run = async () => {
   console.log(`[zrojobs] starting${config.dry ? ' (dry run)' : ''}`);
@@ -25,12 +39,22 @@ const run = async () => {
     console.log(`[zrojobs] curated ${jobs.length} jobs`);
   } catch (e) {
     console.error('[zrojobs] curation failed, posting uncurated:', e.message);
-    jobs = candidates.slice(0, config.digestMax).map((j) => ({ ...j, tag: 'other-tech', summaryHy: '' }));
+    jobs = candidates.slice(0, config.digestMax).map((j) => ({ ...j, tag: 'other-tech' }));
   }
 
   if (!jobs.length) {
     console.log('[zrojobs] curation kept no tech jobs — skipping post');
     return;
+  }
+
+  // Detail pages give the digest its salary/deadline facts either way; the
+  // summary pass is a bonus that degrades to "no summaries" on failure.
+  jobs = await enrich(jobs);
+  try {
+    jobs = await summarize(jobs);
+    console.log(`[zrojobs] summarized ${jobs.filter((j) => j.summaryHy).length} of ${jobs.length}`);
+  } catch (e) {
+    console.warn('[zrojobs] summarize failed, posting without summaries:', e.message);
   }
 
   const text = formatDigest(jobs);
