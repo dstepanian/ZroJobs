@@ -6,6 +6,7 @@ const config = {
   geminiKey: process.env.GEMINI_API_KEY,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   channelHandle: process.env.CHANNEL_HANDLE || process.env.TELEGRAM_CHANNEL || '',
+  siteUrl: process.env.SITE_URL || 'zromek.de',
   promoContact: process.env.PROMO_CONTACT || '',
   digestMin: Number(process.env.DIGEST_MIN || 5),
   digestMax: Number(process.env.DIGEST_MAX || 10),

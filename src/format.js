@@ -94,7 +94,8 @@ export const formatDigest = (jobs, { date } = {}) => {
   const promo = config.promoContact
     ? `  |  Առաջխաղացում՝ ${esc(config.promoContact)}`
     : '';
-  footer.push(`📡 <b>${esc(config.channelHandle)}</b>${promo}`);
+  const handle = config.channelHandle ? `  |  ${esc(config.channelHandle)}` : '';
+  footer.push(`⚡ <b>${esc(config.siteUrl)}</b>${handle}${promo}`);
 
   // Add job blocks until the message would blow the Telegram limit.
   const footerLen = footer.join('\n').length;

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- ZroJobs avatar: slashed programmer's zero in the Armenian tricolor.
+       Keep all content inside r~460 so Telegram's circular crop is safe. -->
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.38" r="0.85">
+      <stop offset="0" stop-color="#182338"/>
+      <stop offset="1" stop-color="#0a0f1c"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- zero ring, three 120° arcs: red / blue / orange -->
+  <g fill="none" stroke-width="92">
+    <path d="M 286.8 382 A 260 260 0 0 1 737.2 382" stroke="#D90012"/>
+    <path d="M 737.2 382 A 260 260 0 0 1 512 772"   stroke="#0033A0"/>
+    <path d="M 512 772   A 260 260 0 0 1 286.8 382" stroke="#F2A800"/>
+  </g>
+
+  <!-- slash: dark underlay cuts the ring, white stroke on top -->
+  <line x1="323" y1="782" x2="701" y2="242" stroke="#0a0f1c" stroke-width="116" stroke-linecap="round"/>
+  <line x1="323" y1="782" x2="701" y2="242" stroke="#F4F6FB" stroke-width="60" stroke-linecap="round"/>
+</svg>
