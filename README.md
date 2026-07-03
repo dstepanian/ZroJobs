@@ -1,6 +1,6 @@
 # ZroJobs
 
-Armenian tech-jobs **digest** bot. Once a day it scrapes staff.am (all IT
+Armenian tech-jobs **digest** bot. Twice a day it scrapes staff.am (all IT
 categories) and public Telegram job channels, uses **Gemini Flash** to keep only
 real tech vacancies, dedupe cross-source reposts and summarize each in Armenian,
 then posts one clean bilingual digest to a Telegram channel. Free to run — no
@@ -9,7 +9,7 @@ server, GitHub Actions cron does the scheduling.
 ```
 staff.am (IT cats) ─┐                                enrich picks
 t.me/s/<channels>  ─┴─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
-                        (new only,    (tech only,    salary, descr.,   summarize   (HY/EN)  (1/day)
+                        (new only,    (tech only,    salary, descr.,   summarize   (HY/EN)  (2/day)
                          seen.json)    5-10 best)     deadline)        (one HY line)
 ```
 
@@ -33,7 +33,8 @@ Dry runs never write `seen.json`, so you can preview as often as you like.
 
 ## Scheduling (free)
 
-`.github/workflows/digest.yml` runs at **15:00 UTC = 19:00 Yerevan** daily.
+`.github/workflows/digest.yml` runs twice daily at **06:00 and 15:00 UTC
+(10:00 and 19:00 Yerevan)**.
 Add the secrets in the repo: **Settings → Secrets and variables → Actions**
 (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`, `GEMINI_API_KEY`). Optional repo
 *variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`. Use **Run
