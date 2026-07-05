@@ -1,5 +1,7 @@
 import { TELEGRAM_CHANNELS } from './sources.js';
 import { fetchStaffAm } from './scrape/staffam.js';
+import { fetchJobAm } from './scrape/jobam.js';
+import { fetchLinkedIn } from './scrape/linkedin.js';
 import { fetchTelegramChannel } from './scrape/telegram.js';
 
 // Run every source adapter in parallel; a failing source logs and contributes
@@ -7,6 +9,8 @@ import { fetchTelegramChannel } from './scrape/telegram.js';
 export const fetchJobs = async () => {
   const adapters = [
     ['staff.am', fetchStaffAm],
+    ['job.am', fetchJobAm],
+    ['LinkedIn', fetchLinkedIn],
     ...TELEGRAM_CHANNELS.map((ch) => [`@${ch}`, () => fetchTelegramChannel(ch)]),
   ];
 
