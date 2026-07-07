@@ -64,6 +64,21 @@ export const yerevanWeek = (d = new Date()) => {
   return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
 };
 
+// Monotonic day counter (days since epoch, Yerevan). Drives stateless daily
+// rotation for the "Company of the day" footer.
+const yerevanDayIndex = (d = new Date()) => {
+  const [y, m, day] = yerevanISO(d).split('-').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, day) / 86400000);
+};
+
+// The company featured in today's digest footer: rotates daily through the
+// hand-curated queue, limited to entries with a verified one-line `factHy`.
+export const companyOfDay = (d = new Date()) => {
+  const pool = loadCompanies().filter((c) => c.factHy);
+  if (!pool.length) return null;
+  return pool[yerevanDayIndex(d) % pool.length];
+};
+
 // Paid listings, hand-edited: [{ title, company, location, summaryHy, url, until }].
 // An entry disappears automatically once its "until" date (YYYY-MM-DD) passes.
 export const loadFeatured = () => {
@@ -122,6 +137,15 @@ export const formatDigest = (jobs, { date } = {}) => {
 
   const footer = [];
   footer.push('➖➖➖➖➖➖➖➖➖➖');
+  // "Company of the day": a light, verified one-liner riding along in the footer
+  // — Armenian-IT-ecosystem discovery without spending a separate notification.
+  const cod = companyOfDay();
+  if (cod) {
+    const name = cod.url
+      ? `<a href="${esc(cod.url)}"><b>${esc(cod.name)}</b></a>`
+      : `<b>${esc(cod.name)}</b>`;
+    footer.push(`🏢 Ընկերություն օրվա՝ ${name} — ${esc(cod.factHy)}`);
+  }
   const promo = config.promoContact
     ? `  |  Առաջխաղացում՝ ${esc(config.promoContact)}`
     : '';
