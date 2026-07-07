@@ -27,7 +27,7 @@ export const yerevanISO = (d = new Date()) => {
   return `${get('year')}-${get('month')}-${get('day')}`;
 };
 
-const esc = (s = '') =>
+export const esc = (s = '') =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const TAG_EMOJI = {
@@ -35,7 +35,34 @@ const TAG_EMOJI = {
   data: '📊', devops: '⚙️', 'other-tech': '🖥️',
 };
 
-const FEATURED_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'featured.json');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FEATURED_FILE = path.join(ROOT, 'featured.json');
+const COMPANIES_FILE = path.join(ROOT, 'companies.json');
+
+// Load the (hand-edited) company spotlight queue, dropping any entry whose
+// "until" date has passed — same expiry rule as featured listings.
+export const loadCompanies = () => {
+  try {
+    const data = JSON.parse(fs.readFileSync(COMPANIES_FILE, 'utf8'));
+    const today = yerevanISO();
+    return (Array.isArray(data) ? data : []).filter((c) => !c.until || c.until >= today);
+  } catch {
+    return [];
+  }
+};
+
+// ISO-8601 week number in Yerevan. Drives stateless weekly rotation so the
+// spotlight needs no committed cursor file.
+export const yerevanWeek = (d = new Date()) => {
+  const iso = yerevanISO(d);
+  const [y, m, day] = iso.split('-').map(Number);
+  const t = Date.UTC(y, m - 1, day);
+  const date = new Date(t);
+  // Shift to the Thursday of this week, then count weeks from Jan 1.
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+};
 
 // Paid listings, hand-edited: [{ title, company, location, summaryHy, url, until }].
 // An entry disappears automatically once its "until" date (YYYY-MM-DD) passes.
@@ -64,12 +91,16 @@ const fmtDeadline = (iso) => {
 // summary, near deadlines and the apply link.
 const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, deadline, url }, marker) => {
   const who = [company, location || (remote ? 'Հեռավար' : '')].filter(Boolean).join(' · ');
-  const head = `${marker} <b>${esc(title)}</b>${who ? ` — ${esc(who)}` : ''}`;
+  // Title itself is the link (Telegram renders it in the accent color); a single
+  // ↗ glyph signals it's tappable without repeating "Դիտել →" on every row.
+  const titleHtml = url
+    ? `<a href="${esc(url)}"><b>${esc(title)} ↗</b></a>`
+    : `<b>${esc(title)}</b>`;
+  const head = `${marker} ${titleHtml}${who ? ` — ${esc(who)}` : ''}`;
   const tail = [
     salary && `💰 ${esc(salary)}`,
     summaryHy && esc(summaryHy),
     fmtDeadline(deadline),
-    url && `<a href="${esc(url)}">Դիտել →</a>`,
   ].filter(Boolean).join(' · ');
   return tail ? `${head}\n      ${tail}` : head;
 };
@@ -107,5 +138,24 @@ export const formatDigest = (jobs, { date } = {}) => {
   }
 
   out.push(...footer);
+  return out.join('\n');
+};
+
+// Telegram photo captions cap at 1024 chars; keep blurbs short.
+const CAPTION_LIMIT = 1000;
+
+// Build the "Employer of the week" photo caption (HTML). The title links to the
+// company when a url is given; the blurb is trimmed to fit the caption cap.
+export const formatSpotlight = ({ name, blurbHy, url }) => {
+  const title = url
+    ? `<a href="${esc(url)}"><b>${esc(name)}</b></a>`
+    : `<b>${esc(name)}</b>`;
+  const out = ['🏢 <b>Այս շաբաթվա գործատուն</b>', '', title];
+  if (blurbHy) {
+    let blurb = blurbHy.trim();
+    if (blurb.length > CAPTION_LIMIT - 120) blurb = `${blurb.slice(0, CAPTION_LIMIT - 121).trimEnd()}…`;
+    out.push('', esc(blurb));
+  }
+  out.push('', `⚡ <b>${esc(config.siteUrl)}</b>${config.channelHandle ? `  |  ${esc(config.channelHandle)}` : ''}`);
   return out.join('\n');
 };

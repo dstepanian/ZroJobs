@@ -8,7 +8,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dry": "node src/index.js --dry",
-    "preview": "node src/index.js --dry --print"
+    "preview": "node src/index.js --dry --print",
+    "spotlight": "node src/spotlight.js",
+    "spotlight:preview": "node src/spotlight.js --dry --print"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

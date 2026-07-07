@@ -1,0 +1,29 @@
+name: Employer Spotlight
+
+on:
+  schedule:
+    # Yerevan is UTC+4 (no DST). Mondays 06:00 UTC = 10:00 Yerevan.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {} # allow manual "Run workflow" from the Actions tab
+
+jobs:
+  spotlight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Post employer spotlight
+        run: npm run spotlight
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
+          SITE_URL: ${{ vars.SITE_URL }}
