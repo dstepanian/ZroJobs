@@ -144,7 +144,7 @@ export const formatDigest = (jobs, { date } = {}) => {
     const name = cod.url
       ? `<a href="${esc(cod.url)}"><b>${esc(cod.name)}</b></a>`
       : `<b>${esc(cod.name)}</b>`;
-    footer.push(`🏢 Ընկերություն օրվա՝ ${name} — ${esc(cod.factHy)}`);
+    footer.push(`🏢 Օրվա ընկերությունը՝ ${name} — ${esc(cod.factHy)}`);
   }
   const promo = config.promoContact
     ? `  |  Առաջխաղացում՝ ${esc(config.promoContact)}`
