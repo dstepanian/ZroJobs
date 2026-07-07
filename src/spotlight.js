@@ -1,6 +1,6 @@
 import config from './config.js';
 import { loadCompanies, yerevanWeek, formatSpotlight } from './format.js';
-import { postPhoto } from './post.js';
+import { postPhoto, postToTelegram } from './post.js';
 
 // Weekly "Employer of the week" spotlight. Runs on its own schedule, fully
 // independent of the daily digest so neither can break the other.
@@ -31,8 +31,19 @@ const run = async () => {
     return;
   }
 
-  if (!company.logo) throw new Error(`company "${company.name}" has no logo`);
-  const result = await postPhoto(company.logo, caption);
+  // Prefer the photo card, but never let a missing or dead logo URL kill the
+  // post: fall back to the same caption as plain text so the spotlight still runs.
+  let result;
+  if (company.logo) {
+    try {
+      result = await postPhoto(company.logo, caption);
+    } catch (e) {
+      console.warn(`[spotlight] photo failed (${e.message}) — falling back to text`);
+    }
+  } else {
+    console.warn(`[spotlight] "${company.name}" has no logo — posting as text`);
+  }
+  if (!result) result = await postToTelegram(caption);
   console.log(`[spotlight] posted message ${result.message_id} to ${config.channel}`);
 };
 
