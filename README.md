@@ -44,7 +44,8 @@ workflow** on the Actions tab to fire a manual test.
 The digest reserves **2–4 slots for eligible international/remote jobs** from
 Remotive and fills the remaining slots with Armenia-market jobs. Override the
 range with `INTERNATIONAL_MIN` and `INTERNATIONAL_MAX` if needed. Remote jobs
-keep their Remotive link and are credited in the post.
+keep their Remotive link and are credited in the post. When alternatives exist,
+the selector prefers one international job per company to keep the section varied.
 
 Each successful post appends the posted job ids to `seen.json` and the workflow
 commits it back (pruned after 30 days), so a job is never posted twice.

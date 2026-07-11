@@ -38,7 +38,8 @@ Your job:
    jobs marked "Market: international/remote" when enough such candidates exist,
    and fill the remaining slots with jobs marked "Market: Armenia". If fewer
    than ${internationalMin} international candidates are available, use all that
-   are genuinely suitable; never invent or relabel a job's market.
+   are genuinely suitable; never invent or relabel a job's market. Prefer no
+   more than one international job per company when other companies are available.
 5. For each pick, output:
    - "index": the NUMBER of the candidate (from the numbered list) — required for linking.
    - "title": the job title in English, cleaned up (e.g. "Senior Backend Engineer").
@@ -111,10 +112,18 @@ export const curate = async (jobs) => {
   // under-selects international jobs, replace the least-preferred Armenia picks
   // with eligible remote candidates instead of relying on model compliance.
   const internationalCandidates = jobs.filter((job) => job.market === 'international');
-  const minInternational = Math.min(config.internationalMin, internationalCandidates.length);
   const maxInternational = Math.min(config.internationalMax, config.digestMax);
+  const companyKey = (job) =>
+    (job.company || job.id).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const internationalCompanies = new Set();
   const international = curated
     .filter((job) => job.market === 'international')
+    .filter((job) => {
+      const key = companyKey(job);
+      if (internationalCompanies.has(key)) return false;
+      internationalCompanies.add(key);
+      return true;
+    })
     .slice(0, maxInternational);
   const armenia = curated.filter((job) => job.market !== 'international');
 
@@ -126,17 +135,24 @@ export const curate = async (jobs) => {
     tag: job.tag || 'other-tech',
   });
 
+  // Prefer one international job per company, and use the full remote quota
+  // when enough distinct employers are available.
+  const availableInternationalCompanies = new Set(internationalCandidates.map(companyKey));
+  const desiredInternational = Math.min(maxInternational, availableInternationalCompanies.size);
+  const targetSize = Math.min(config.digestMax, curated.length);
   for (const candidate of internationalCandidates) {
-    if (international.length >= minInternational) break;
+    if (international.length >= desiredInternational) break;
     if (pickedIds.has(candidate.id)) continue;
+    const key = companyKey(candidate);
+    if (internationalCompanies.has(key)) continue;
     pickedIds.add(candidate.id);
-    if (armenia.length) armenia.pop();
+    internationalCompanies.add(key);
+    if (international.length + armenia.length >= targetSize && armenia.length) armenia.pop();
     international.push(rawPick(candidate));
   }
 
   // If Gemini selected too many international jobs, use the next local picks to
   // keep the total digest size stable where possible.
-  const targetSize = Math.min(config.digestMax, curated.length);
   if (international.length + armenia.length < targetSize) {
     for (const candidate of jobs) {
       if (international.length + armenia.length >= targetSize) break;

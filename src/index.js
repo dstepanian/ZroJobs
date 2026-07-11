@@ -20,8 +20,15 @@ const enrich = (jobs) =>
   }));
 
 const fallbackMix = (candidates) => {
+  const internationalCompanies = new Set();
   const international = candidates
     .filter((job) => job.market === 'international')
+    .filter((job) => {
+      const key = (job.company || job.id).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (internationalCompanies.has(key)) return false;
+      internationalCompanies.add(key);
+      return true;
+    })
     .slice(0, config.internationalMax);
   const armenia = candidates
     .filter((job) => job.market !== 'international')

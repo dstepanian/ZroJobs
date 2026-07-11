@@ -116,7 +116,7 @@ const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, de
     salary && `💰 ${esc(salary)}`,
     summaryHy && esc(summaryHy),
     fmtDeadline(deadline),
-    source === 'Remotive' && 'via Remotive',
+    source === 'Remotive' && 'Remotive',
   ].filter(Boolean).join(' · ');
   return tail ? `${head}\n      ${tail}` : head;
 };
