@@ -9,6 +9,7 @@ const describe = (job, n) => {
     job.company && `Company: ${job.company}`,
     job.location && `Location: ${job.location}`,
     job.remote && 'Remote-friendly',
+    `Market: ${job.market === 'international' ? 'international/remote' : 'Armenia'}`,
     job.category && `Category: ${job.category}`,
     job.text && `Post text: ${job.text.slice(0, 600)}`,
   ].filter(Boolean);
@@ -18,7 +19,7 @@ const describe = (job, n) => {
 // ---- Pass 1: pick the best tech jobs (no summaries yet — the picked jobs get
 // enriched with detail-page text first, then summarized in pass 2). ----
 
-const buildPickPrompt = (jobs, min, max) => `
+const buildPickPrompt = (jobs, min, max, internationalMin, internationalMax) => `
 You are the editor of a daily Armenian tech-jobs digest on Telegram.
 Below are ${jobs.length} candidate postings scraped from job boards and Telegram
 channels (mixed Armenian/English/Russian, mixed quality, some are not tech jobs).
@@ -33,7 +34,12 @@ Your job:
 3. Pick the ${min}-${max} best of what remains — prefer named companies, clear
    roles, senior/interesting positions, and remote-friendly offers. If fewer than
    ${min} real tech jobs exist, return only what's real; never pad with non-tech.
-4. For each pick, output:
+4. Keep a deliberate market mix: choose ${internationalMin}-${internationalMax}
+   jobs marked "Market: international/remote" when enough such candidates exist,
+   and fill the remaining slots with jobs marked "Market: Armenia". If fewer
+   than ${internationalMin} international candidates are available, use all that
+   are genuinely suitable; never invent or relabel a job's market.
+5. For each pick, output:
    - "index": the NUMBER of the candidate (from the numbered list) — required for linking.
    - "title": the job title in English, cleaned up (e.g. "Senior Backend Engineer").
      If the posting is only in Armenian or Russian, translate the title to English.
@@ -72,13 +78,25 @@ const pickSchema = {
 // Throws on failure so the caller can fall back to an uncurated list.
 export const curate = async (jobs) => {
   if (!jobs.length) return [];
-  const parsed = await generateJson(buildPickPrompt(jobs, config.digestMin, config.digestMax), pickSchema);
-  return (Array.isArray(parsed.items) ? parsed.items : [])
+  const parsed = await generateJson(
+    buildPickPrompt(
+      jobs,
+      config.digestMin,
+      config.digestMax,
+      config.internationalMin,
+      config.internationalMax,
+    ),
+    pickSchema,
+  );
+
+  const pickedIds = new Set();
+  const curated = (Array.isArray(parsed.items) ? parsed.items : [])
     .slice(0, config.digestMax)
     .map(({ index, title, company, location, tag }) => {
       // Gemini returns a 1-based index into the numbered candidate list.
       const raw = jobs[index - 1];
-      if (!raw) return null;
+      if (!raw || pickedIds.has(raw.id)) return null;
+      pickedIds.add(raw.id);
       return {
         ...raw,
         title: (title || raw.title).trim(),
@@ -88,6 +106,47 @@ export const curate = async (jobs) => {
       };
     })
     .filter(Boolean);
+
+  // The prompt asks Gemini for a mix, but enforce it here as well. If Gemini
+  // under-selects international jobs, replace the least-preferred Armenia picks
+  // with eligible remote candidates instead of relying on model compliance.
+  const internationalCandidates = jobs.filter((job) => job.market === 'international');
+  const minInternational = Math.min(config.internationalMin, internationalCandidates.length);
+  const maxInternational = Math.min(config.internationalMax, config.digestMax);
+  const international = curated
+    .filter((job) => job.market === 'international')
+    .slice(0, maxInternational);
+  const armenia = curated.filter((job) => job.market !== 'international');
+
+  const rawPick = (job) => ({
+    ...job,
+    title: (job.title || '').trim(),
+    company: (job.company || '').trim(),
+    location: (job.location || '').trim(),
+    tag: job.tag || 'other-tech',
+  });
+
+  for (const candidate of internationalCandidates) {
+    if (international.length >= minInternational) break;
+    if (pickedIds.has(candidate.id)) continue;
+    pickedIds.add(candidate.id);
+    if (armenia.length) armenia.pop();
+    international.push(rawPick(candidate));
+  }
+
+  // If Gemini selected too many international jobs, use the next local picks to
+  // keep the total digest size stable where possible.
+  const targetSize = Math.min(config.digestMax, curated.length);
+  if (international.length + armenia.length < targetSize) {
+    for (const candidate of jobs) {
+      if (international.length + armenia.length >= targetSize) break;
+      if (candidate.market === 'international' || pickedIds.has(candidate.id)) continue;
+      pickedIds.add(candidate.id);
+      armenia.push(rawPick(candidate));
+    }
+  }
+
+  return [...international, ...armenia].slice(0, config.digestMax);
 };
 
 // ---- Pass 2: one-line Armenian summaries from the enriched detail text. ----

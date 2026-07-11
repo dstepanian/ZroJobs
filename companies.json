@@ -6,5 +6,137 @@
     "factHy": "Երևանում հիմնված R&D կենտրոն՝ SaaS դաշտային սպասարկման ոլորտում",
     "url": "https://www.servicetitan.com/careers",
     "until": "2026-12-31"
+  },
+  {
+    "name": "Renderforest",
+    "blurbHy": "Երևանում ստեղծված all-in-one հարթակ՝ վիդեոների, կայքերի, լոգոների և այլ բրենդային նյութերի պատրաստման համար։",
+    "factHy": "Երևանում հիմնված ստեղծարար հարթակ՝ վիդեո և բրենդինգ գործիքներով",
+    "url": "https://www.renderforest.com/about/"
+  },
+  {
+    "name": "Krisp",
+    "blurbHy": "Երևանում հիմնված ձայնային AI ընկերություն, որը ստեղծում է noise cancellation, speech-to-text և real-time voice տեխնոլոգիաներ։",
+    "factHy": "Երևանի AI լաբորատորիա՝ ձայնային տեխնոլոգիաներ on-device մշակող թիմով",
+    "url": "https://krisp.ai/"
+  },
+  {
+    "name": "Picsart",
+    "blurbHy": "Հայաստանում ստեղծված AI creative platform՝ լուսանկարների, վիդեոների, դիզայնների և բրենդային նյութերի ստեղծման գործիքներով։",
+    "factHy": "Հայաստանում ստեղծված գլոբալ creative platform՝ AI դիզայնի գործիքներով",
+    "url": "https://picsart.com/about-us/"
+  },
+  {
+    "name": "SoloLearn",
+    "blurbHy": "Հայաստանից ստեղծված coding-learning հարթակ, որտեղ օգտատերերը սովորում և վարժվում են ծրագրավորման լեզուներով։",
+    "factHy": "Հայաստանից ստեղծված ուսուցման հարթակ՝ ծրագրավորում սովորելու համար",
+    "url": "https://www.sololearn.com/"
+  },
+  {
+    "name": "Digitain",
+    "blurbHy": "Հայաստանում հիմնված միջազգային iGaming տեխնոլոգիական ընկերություն՝ sportsbook, casino, payment և այլ հարթակներով։",
+    "factHy": "Երևանում գրանցված iGaming տեխնոլոգիական ընկերություն՝ գլոբալ հարթակներով",
+    "url": "https://www.digitain.com/career-2/"
+  },
+  {
+    "name": "IDEA Technologies",
+    "blurbHy": "Հայաստանում գլխամասով R&D ընկերություն, որը մշակում է նորարարական software և տեխնոլոգիական լուծումներ։",
+    "factHy": "Հայաստանում գլխամասով R&D ընկերություն՝ նորարարական տեխնոլոգիական լուծումներով",
+    "url": "https://ideatech.am/en/about"
+  },
+  {
+    "name": "Virtual Solutions",
+    "blurbHy": "Հայկական AI ընկերություն՝ speech-to-text, text-to-speech, ենթագրերի և մեդիա ավտոմատացման լուծումներով։",
+    "factHy": "Հայկական AI ընկերություն՝ ձայնային տեխնոլոգիաներ և մեդիա ավտոմատացում մշակող",
+    "url": "https://vs.am/about/"
+  },
+  {
+    "name": "LimeTech",
+    "blurbHy": "Երևանում գործող hardware և software ընկերություն՝ հերթերի կառավարման, վճարային և ինքնասպասարկման տերմինալներով։",
+    "factHy": "Երևանում գործող ընկերություն՝ customer-service automation և խելացի տերմինալներով",
+    "url": "https://limetech.am/about-us/"
+  },
+  {
+    "name": "Synergy International Systems",
+    "blurbHy": "Հայաստանում գործող enterprise software ընկերություն, որը ստեղծում է տվյալների և կառավարման համակարգեր միջազգային կազմակերպությունների համար։",
+    "factHy": "Հայաստանում գործող enterprise software ընկերություն՝ միջազգային կառավարման համակարգերով",
+    "url": "https://www.synergy.com/"
+  },
+  {
+    "name": "Tech 404",
+    "blurbHy": "Երևանում հիմնված full-cycle product development ընկերություն՝ software, hardware, IoT և դիզայնի լուծումներով։",
+    "factHy": "Երևանում հիմնված full-cycle ընկերություն՝ software, hardware և IoT լուծումներով",
+    "url": "https://www.linkedin.com/company/tech-404/"
+  },
+  {
+    "name": "ZEMA AM",
+    "blurbHy": "Հայաստանում արմատավորված engineering և AI ընկերություն, որը ստեղծում է տեխնոլոգիական լուծումներ միջազգային հաճախորդների համար։",
+    "factHy": "Հայաստանում արմատավորված engineering թիմ՝ AI և custom software լուծումներով",
+    "url": "https://zema.group/about"
+  },
+  {
+    "name": "Astudio",
+    "blurbHy": "Հայկական full-cycle IT ընկերություն, որը համադրում է տեխնոլոգիան, կրեատիվը և ռազմավարությունը բիզնեսների աճի համար։",
+    "factHy": "Հայկական full-cycle IT ընկերություն՝ software, design և business strategy ուղղություններով",
+    "url": "https://www.linkedin.com/company/astudio-web/"
+  },
+  {
+    "name": "AltaCode",
+    "blurbHy": "Երևանում գործող software development թիմ՝ custom web լուծումների, React-ի և այլ ժամանակակից տեխնոլոգիաների մասնագիտացմամբ։",
+    "factHy": "Երևանում գործող software development թիմ՝ web և custom software լուծումներով",
+    "url": "https://www.linkedin.com/company/altacode/"
+  },
+  {
+    "name": "Luminex Technology Armenia",
+    "blurbHy": "Երևանում գործող տեխնոլոգիական ընկերություն, որը ստեղծում է custom software լուծումներ և օգնում բիզնեսներին թվայնանալ։",
+    "factHy": "Երևանում գործող custom software ընկերություն՝ գլոբալ շուկայի համար լուծումներով",
+    "url": "https://www.linkedin.com/company/luminex-technology-armenia/"
+  },
+  {
+    "name": "EPAM Armenia",
+    "blurbHy": "Գլոբալ digital engineering ընկերության հայկական թիմը ստեղծում է բարդ software լուծումներ միջազգային հաճախորդների համար։",
+    "factHy": "Գլոբալ digital engineering ընկերություն՝ 2014-ից զարգացող 900+ մասնագետով Հայաստանում",
+    "url": "https://www.epam.com/careers/locations/armenia"
+  },
+  {
+    "name": "TeamViewer Armenia",
+    "blurbHy": "TeamViewer-ի Երևանի թիմը մասնակցում է հեռահար կապի, remote support-ի և թվային workplace լուծումների ստեղծմանը։",
+    "factHy": "TeamViewer-ի կարևոր EMEA գրասենյակ՝ գլոբալ distributed թիմերի մաս Երևանում",
+    "url": "https://www.teamviewer.com/en-in/global/company/careers/"
+  },
+  {
+    "name": "Synopsys Armenia",
+    "blurbHy": "Synopsys-ի հայկական R&D թիմը աշխատում է chip design, verification, semiconductor IP և software security ուղղություններով։",
+    "factHy": "Խոշոր semiconductor R&D կենտրոն՝ Երևանում և Գյումրիում գործող 1000+ աշխատակցով",
+    "url": "https://www.synopsys.com/company/contact-synopsys/office-locations/armenia.html"
+  },
+  {
+    "name": "Siemens EDA Armenia",
+    "blurbHy": "Siemens EDA-ի հայկական թիմը զարգացնում է electronic design automation և semiconductor engineering տեխնոլոգիաներ։",
+    "factHy": "Միջազգային EDA ընկերություն՝ Հայաստանում ընդլայնվող high-tech գործունեությամբ",
+    "url": "https://www.primeminister.am/en/press-release/item/2025/04/03/Nikol-Pashinyan-meeting-Siemens-EDA/"
+  },
+  {
+    "name": "Grid Dynamics Armenia",
+    "blurbHy": "Գլոբալ engineering ընկերության Երևանի թիմը ստեղծում է cloud, data, AI և enterprise software լուծումներ։",
+    "factHy": "Գլոբալ engineering ընկերություն՝ Երևանի գրասենյակում data և AI հնարավորություններով",
+    "url": "https://www.griddynamics.com/careers"
+  },
+  {
+    "name": "DataArt Armenia",
+    "blurbHy": "DataArt-ի հայկական թիմը ներգրավված է միջազգային հաճախորդների software engineering և digital product նախագծերում։",
+    "factHy": "Միջազգային software engineering ընկերություն՝ Երևանում գործող թիմով",
+    "url": "https://www.dataart.com/contact-us/yerevan"
+  },
+  {
+    "name": "SADA Armenia",
+    "blurbHy": "Google Cloud-ի գործընկեր SADA-ի հայկական թիմը օգնում է կազմակերպություններին տեղափոխվել և զարգանալ cloud-ում։",
+    "factHy": "Cloud technology services ընկերություն՝ Հայաստանի համար առանձին կարիերայի ուղղությամբ",
+    "url": "https://sada.com/careers/job-openings-armenia/"
+  },
+  {
+    "name": "Adobe Armenia",
+    "blurbHy": "Adobe-ի Երևանի թիմը աշխատում է creative tools, AI, product և software engineering ուղղություններով։",
+    "factHy": "Adobe-ի Yerevan engineering թիմ՝ AI և product development աշխատանքներով",
+    "url": "https://www.adobe.com/careers/teams/engineering-and-product.html"
   }
 ]

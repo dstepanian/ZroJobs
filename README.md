@@ -1,16 +1,17 @@
 # ZroJobs
 
-Armenian tech-jobs **digest** bot. Twice a day it scrapes staff.am (all IT
-categories) and public Telegram job channels, uses **Gemini Flash** to keep only
-real tech vacancies, dedupe cross-source reposts and summarize each in Armenian,
-then posts one clean bilingual digest to a Telegram channel. Free to run — no
-server, GitHub Actions cron does the scheduling.
+Armenian tech-jobs **digest** bot. Twice a day it scrapes Armenian job boards,
+LinkedIn, public Telegram job channels, and a curated international remote feed,
+then uses **Gemini Flash** to keep only real tech vacancies, dedupe cross-source
+reposts and summarize each in Armenian. It posts one clean bilingual digest to
+a Telegram channel. Free to run — no server, GitHub Actions cron does the
+scheduling.
 
 ```
 staff.am (IT cats) ─┐                                enrich picks
-t.me/s/<channels>  ─┴─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
-                        (new only,    (tech only,    salary, descr.,   summarize   (HY/EN)  (2/day)
-                         seen.json)    5-10 best)     deadline)        (one HY line)
+job.am + LinkedIn   ├─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
+Remotive (remote)   ┤    (new only,    (2-4 remote +  salary, descr.,   summarize   (HY/EN)  (2/day)
+t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one HY line)
 ```
 
 ## Setup
@@ -40,6 +41,11 @@ Add the secrets in the repo: **Settings → Secrets and variables → Actions**
 *variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`. Use **Run
 workflow** on the Actions tab to fire a manual test.
 
+The digest reserves **2–4 slots for eligible international/remote jobs** from
+Remotive and fills the remaining slots with Armenia-market jobs. Override the
+range with `INTERNATIONAL_MIN` and `INTERNATIONAL_MAX` if needed. Remote jobs
+keep their Remotive link and are credited in the post.
+
 Each successful post appends the posted job ids to `seen.json` and the workflow
 commits it back (pruned after 30 days), so a job is never posted twice.
 
@@ -53,6 +59,8 @@ commits it back (pruned after 30 days), so a job is never posted twice.
 - **Telegram channels** — scraped via their public `t.me/s/<name>` preview pages
   (no API/auth). Add channels in `src/sources.js`; mixed-content channels are
   fine, curation drops non-tech posts.
+- **Remotive** — public remote-jobs JSON feed; technical roles with broad
+  location eligibility are marked international and mixed into each digest.
 
 ## Monetization: featured listings
 
@@ -81,6 +89,7 @@ variable (e.g. `@yourusername`) to advertise the option in the digest footer.
 | `src/sources.js` | staff.am category ids + Telegram channel list |
 | `src/scrape/staffam.js` | staff.am `__NEXT_DATA__` scraper — listing + detail enrichment (salary, description, deadline) |
 | `src/scrape/telegram.js` | generic `t.me/s/` channel scraper |
+| `src/scrape/remotive.js` | Remotive public remote-jobs feed, filtered for technical and broad-location roles |
 | `src/text.js` | shared HTML-to-text helper |
 | `src/fetchJobs.js` | parallel fetch, fail-soft per source |
 | `src/aggregate.js` | 7-day window, drop seen, dedupe, cap |

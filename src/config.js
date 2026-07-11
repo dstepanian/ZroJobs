@@ -10,6 +10,8 @@ const config = {
   promoContact: process.env.PROMO_CONTACT || '',
   digestMin: Number(process.env.DIGEST_MIN || 5),
   digestMax: Number(process.env.DIGEST_MAX || 10),
+  internationalMin: Number(process.env.INTERNATIONAL_MIN || 2),
+  internationalMax: Number(process.env.INTERNATIONAL_MAX || 4),
   // CLI flags
   dry: process.argv.includes('--dry'),
   print: process.argv.includes('--print'),

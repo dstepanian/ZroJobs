@@ -19,6 +19,18 @@ const enrich = (jobs) =>
     }
   }));
 
+const fallbackMix = (candidates) => {
+  const international = candidates
+    .filter((job) => job.market === 'international')
+    .slice(0, config.internationalMax);
+  const armenia = candidates
+    .filter((job) => job.market !== 'international')
+    .slice(0, Math.max(0, config.digestMax - international.length));
+  return [...international, ...armenia]
+    .slice(0, config.digestMax)
+    .map((job) => ({ ...job, tag: job.tag || 'other-tech' }));
+};
+
 const run = async () => {
   console.log(`[zrojobs] starting${config.dry ? ' (dry run)' : ''}`);
 
@@ -39,7 +51,7 @@ const run = async () => {
     console.log(`[zrojobs] curated ${jobs.length} jobs`);
   } catch (e) {
     console.error('[zrojobs] curation failed, posting uncurated:', e.message);
-    jobs = candidates.slice(0, config.digestMax).map((j) => ({ ...j, tag: 'other-tech' }));
+    jobs = fallbackMix(candidates);
   }
 
   if (!jobs.length) {

@@ -104,7 +104,7 @@ const fmtDeadline = (iso) => {
 
 // One job entry: title line, then a detail line with salary, one-line Armenian
 // summary, near deadlines and the apply link.
-const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, deadline, url }, marker) => {
+const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, deadline, url, source }, marker) => {
   const who = [company, location || (remote ? 'Հեռավար' : '')].filter(Boolean).join(' · ');
   // Title itself is the link (Telegram renders it in the accent color); a single
   // ↗ glyph signals it's tappable without repeating "Դիտել →" on every row.
@@ -116,6 +116,7 @@ const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, de
     salary && `💰 ${esc(salary)}`,
     summaryHy && esc(summaryHy),
     fmtDeadline(deadline),
+    source === 'Remotive' && 'via Remotive',
   ].filter(Boolean).join(' · ');
   return tail ? `${head}\n      ${tail}` : head;
 };
@@ -130,9 +131,22 @@ export const formatDigest = (jobs, { date } = {}) => {
   out.push(`💼 <b>Օրվա IT աշխատատեղերը — ${date || yerevanDate()}</b>`);
   out.push('');
 
+  const international = jobs.filter((j) => j.market === 'international');
+  const armenia = jobs.filter((j) => j.market !== 'international');
   const blocks = [
     ...loadFeatured().map((f) => jobBlock(f, '⭐')),
-    ...jobs.map((j) => jobBlock(j, TAG_EMOJI[j.tag] || '🔹')),
+    ...(international.length
+      ? [
+        '🌍 <b>Միջազգային / հեռավար աշխատատեղեր</b>',
+        ...international.map((j) => jobBlock(j, '🌍')),
+      ]
+      : []),
+    ...(armenia.length
+      ? [
+        '🇦🇲 <b>Հայաստանի աշխատատեղեր</b>',
+        ...armenia.map((j) => jobBlock(j, TAG_EMOJI[j.tag] || '🔹')),
+      ]
+      : []),
   ];
 
   const footer = [];
@@ -145,6 +159,7 @@ export const formatDigest = (jobs, { date } = {}) => {
       ? `<a href="${esc(cod.url)}"><b>${esc(cod.name)}</b></a>`
       : `<b>${esc(cod.name)}</b>`;
     footer.push(`🏢 Օրվա ընկերությունը՝ ${name} — ${esc(cod.factHy)}`);
+    footer.push('');
   }
   const promo = config.promoContact
     ? `  |  Առաջխաղացում՝ ${esc(config.promoContact)}`
