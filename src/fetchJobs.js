@@ -3,6 +3,9 @@ import { fetchStaffAm } from './scrape/staffam.js';
 import { fetchJobAm } from './scrape/jobam.js';
 import { fetchLinkedIn } from './scrape/linkedin.js';
 import { fetchRemotive } from './scrape/remotive.js';
+import { fetchEpam } from './scrape/epam.js';
+import { fetchTonJobs } from './scrape/ton.js';
+import { fetchWeWorkRemotely } from './scrape/weworkremotely.js';
 import { fetchTelegramChannel } from './scrape/telegram.js';
 
 // Run every source adapter in parallel; a failing source logs and contributes
@@ -12,7 +15,10 @@ export const fetchJobs = async () => {
     ['staff.am', fetchStaffAm],
     ['job.am', fetchJobAm],
     ['LinkedIn', fetchLinkedIn],
+    ['EPAM', fetchEpam],
     ['Remotive', fetchRemotive],
+    ['TON Jobs', fetchTonJobs],
+    ['We Work Remotely', fetchWeWorkRemotely],
     ...TELEGRAM_CHANNELS.map((ch) => [`@${ch}`, () => fetchTelegramChannel(ch)]),
   ];
 
@@ -21,7 +27,9 @@ export const fetchJobs = async () => {
       try {
         const jobs = await fn();
         console.log(`[zrojobs] ${name}: ${jobs.length} jobs`);
-        const market = name === 'Remotive' ? 'international' : 'armenia';
+        const market = ['Remotive', 'TON Jobs', 'We Work Remotely'].includes(name)
+          ? 'international'
+          : 'armenia';
         return jobs.map((job) => ({ ...job, market: job.market || market }));
       } catch (e) {
         console.error(`[zrojobs] ${name} failed: ${e.message}`);

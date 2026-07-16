@@ -10,7 +10,8 @@
     "dry": "node src/index.js --dry",
     "preview": "node src/index.js --dry --print",
     "spotlight": "node src/spotlight.js",
-    "spotlight:preview": "node src/spotlight.js --dry --print"
+    "spotlight:preview": "node src/spotlight.js --dry --print",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

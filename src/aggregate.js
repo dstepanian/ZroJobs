@@ -6,7 +6,29 @@ import { loadSeen } from './seen.js';
 // didn't make yesterday's cut stay eligible today.
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const INTERNATIONAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-const INTERNATIONAL_CANDIDATE_CAP = 12;
+const INTERNATIONAL_CANDIDATE_CAP = 18;
+
+// Keep the model's source pool varied. Without this, one large board can occupy
+// every candidate slot and make smaller official/company boards vanish.
+export const takeSourceDiverse = (jobs, cap) => {
+  const queues = new Map();
+  for (const job of jobs) {
+    const key = job.source || 'unknown';
+    if (!queues.has(key)) queues.set(key, []);
+    queues.get(key).push(job);
+  }
+
+  const selected = [];
+  while (selected.length < cap && queues.size) {
+    for (const [source, queue] of queues) {
+      const job = queue.shift();
+      if (job) selected.push(job);
+      if (!queue.length) queues.delete(source);
+      if (selected.length >= cap) break;
+    }
+  }
+  return selected;
+};
 
 export const aggregate = async ({ windowMs = WINDOW_MS, cap = 40 } = {}) => {
   const seen = loadSeen();
@@ -16,19 +38,22 @@ export const aggregate = async ({ windowMs = WINDOW_MS, cap = 40 } = {}) => {
   const unique = new Map();
   for (const job of await fetchJobs()) {
     if (seen[job.id]) continue;
-    const jobCutoff = job.market === 'international' ? internationalCutoff : cutoff;
+    const jobCutoff = job.candidateWindowMs
+      ? Date.now() - job.candidateWindowMs
+      : job.market === 'international' ? internationalCutoff : cutoff;
     if (job.postedAt < jobCutoff) continue;
     if (!unique.has(job.id)) unique.set(job.id, job);
   }
 
   const eligible = [...unique.values()]
-    .sort((a, b) => b.postedAt - a.postedAt)
+    .sort((a, b) => b.postedAt - a.postedAt);
   const international = eligible
-    .filter((job) => job.market === 'international')
-    .slice(0, INTERNATIONAL_CANDIDATE_CAP);
-  const armenia = eligible
-    .filter((job) => job.market !== 'international')
-    .slice(0, Math.max(0, cap - international.length));
+    .filter((job) => job.market === 'international');
+  const diverseInternational = takeSourceDiverse(international, INTERNATIONAL_CANDIDATE_CAP);
+  const armenia = takeSourceDiverse(
+    eligible.filter((job) => job.market !== 'international'),
+    Math.max(0, cap - diverseInternational.length),
+  );
 
-  return [...armenia, ...international].sort((a, b) => b.postedAt - a.postedAt);
+  return [...armenia, ...diverseInternational].sort((a, b) => b.postedAt - a.postedAt);
 };

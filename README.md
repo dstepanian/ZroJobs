@@ -1,7 +1,7 @@
 # ZroJobs
 
 Armenian tech-jobs **digest** bot. Twice a day it scrapes Armenian job boards,
-LinkedIn, public Telegram job channels, and a curated international remote feed,
+official company/ecosystem boards, public Telegram channels, and curated remote feeds,
 then uses **Gemini Flash** to keep only real tech vacancies, dedupe cross-source
 reposts and summarize each in Armenian. It posts one clean bilingual digest to
 a Telegram channel. Free to run — no server, GitHub Actions cron does the
@@ -10,7 +10,8 @@ scheduling.
 ```
 staff.am (IT cats) ─┐                                enrich picks
 job.am + LinkedIn   ├─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
-Remotive (remote)   ┤    (new only,    (2-4 remote +  salary, descr.,   summarize   (HY/EN)  (2/day)
+Remote feeds + TON  ┤    (new only,    (2-4 remote +  salary, descr.,   summarize   (HY/EN)  (2/day)
+EPAM Armenia        ┤
 t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one HY line)
 ```
 
@@ -42,13 +43,15 @@ Add the secrets in the repo: **Settings → Secrets and variables → Actions**
 workflow** on the Actions tab to fire a manual test.
 
 The digest reserves **2–4 slots for eligible international/remote jobs** from
-Remotive and fills the remaining slots with Armenia-market jobs. Override the
+Remotive, TON Jobs, and We Work Remotely, then fills the remaining slots with
+Armenia-market jobs. Override the
 range with `INTERNATIONAL_MIN` and `INTERNATIONAL_MAX` if needed. Remote jobs
-keep their Remotive link and are credited in the post. When alternatives exist,
-the selector prefers one international job per company to keep the section varied.
+keep their original link and are credited in the post. When alternatives exist,
+the candidate pool balances every source, and the selector prefers one
+international job per company.
 
-Each successful post appends the posted job ids to `seen.json` and the workflow
-commits it back (pruned after 30 days), so a job is never posted twice.
+Each successful post appends the posted job ids to `seen.json`; the workflow
+persists it in the Actions cache (pruned after 30 days), so a job is never posted twice.
 
 ## Sources
 
@@ -60,8 +63,14 @@ commits it back (pruned after 30 days), so a job is never posted twice.
 - **Telegram channels** — scraped via their public `t.me/s/<name>` preview pages
   (no API/auth). Add channels in `src/sources.js`; mixed-content channels are
   fine, curation drops non-tech posts.
+- **EPAM Armenia** — official careers page, parsed from its structured Next.js
+  listing data. Adds direct EPAM vacancies for Armenia without repost links.
+- **TON Jobs** — official TON ecosystem board. Only remote, technical roles with
+  Armenia-compatible scope enter the international pool.
 - **Remotive** — public remote-jobs JSON feed; technical roles with broad
   location eligibility are marked international and mixed into each digest.
+- **We Work Remotely** — official public programming, product, design, and
+  DevOps RSS feeds, with source attribution and location eligibility filtering.
 
 ## Monetization: featured listings
 
@@ -91,6 +100,9 @@ variable (e.g. `@yourusername`) to advertise the option in the digest footer.
 | `src/scrape/staffam.js` | staff.am `__NEXT_DATA__` scraper — listing + detail enrichment (salary, description, deadline) |
 | `src/scrape/telegram.js` | generic `t.me/s/` channel scraper |
 | `src/scrape/remotive.js` | Remotive public remote-jobs feed, filtered for technical and broad-location roles |
+| `src/scrape/weworkremotely.js` | Official WWR RSS feeds, filtered for technical Armenia-accessible roles |
+| `src/scrape/ton.js` | Official TON ecosystem job board |
+| `src/scrape/epam.js` | Official EPAM Armenia careers page |
 | `src/text.js` | shared HTML-to-text helper |
 | `src/fetchJobs.js` | parallel fetch, fail-soft per source |
 | `src/aggregate.js` | 7-day window, drop seen, dedupe, cap |

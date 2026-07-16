@@ -21,6 +21,11 @@ const enrich = (jobs) =>
 
 const fallbackMix = (candidates) => {
   const internationalCompanies = new Set();
+  const internationalLimit = Math.min(
+    config.internationalMin,
+    config.internationalMax,
+    config.digestMax,
+  );
   const international = candidates
     .filter((job) => job.market === 'international')
     .filter((job) => {
@@ -29,7 +34,7 @@ const fallbackMix = (candidates) => {
       internationalCompanies.add(key);
       return true;
     })
-    .slice(0, config.internationalMax);
+    .slice(0, internationalLimit);
   const armenia = candidates
     .filter((job) => job.market !== 'international')
     .slice(0, Math.max(0, config.digestMax - international.length));

@@ -135,10 +135,15 @@ export const curate = async (jobs) => {
     tag: job.tag || 'other-tech',
   });
 
-  // Prefer one international job per company, and use the full remote quota
-  // when enough distinct employers are available.
+  // Prefer one international job per company. Enforce the minimum here, while
+  // allowing Gemini to keep additional strong picks up to the configured max.
+  // This avoids exhausting a finite remote feed twice per day.
   const availableInternationalCompanies = new Set(internationalCandidates.map(companyKey));
-  const desiredInternational = Math.min(maxInternational, availableInternationalCompanies.size);
+  const desiredInternational = Math.min(
+    config.internationalMin,
+    maxInternational,
+    availableInternationalCompanies.size,
+  );
   const targetSize = Math.min(config.digestMax, curated.length);
   for (const candidate of internationalCandidates) {
     if (international.length >= desiredInternational) break;
