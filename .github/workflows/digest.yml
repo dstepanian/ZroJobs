@@ -45,8 +45,11 @@ jobs:
           POST_DELAY_MS: ${{ vars.POST_DELAY_MS }}
 
       # Persist the updated dedup state as a fresh cache entry (no git commit to
-      # main, so it never collides with manual pushes).
+      # main, so it never collides with manual pushes). always(): posting is one
+      # message per job and each success is written to seen.json on the spot, so
+      # a run that dies partway must still persist what it already posted.
       - name: Save seen.json
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: seen.json
