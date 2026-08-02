@@ -210,10 +210,31 @@ const postBody = (job, head) => [
   hashtags(job),
 ].filter(Boolean).join('\n\n');
 
+// Badges are earned, never decorative: 🆕 means the source published it within
+// the day, 🔥 that the deadline is close enough to act on now. A badge that
+// appears on everything stops meaning anything, so both stay narrow.
+const NEW_WITHIN_MS = 24 * 60 * 60 * 1000;
+const URGENT_WITHIN_DAYS = 3;
+
+export const badges = (job) => {
+  const out = [];
+  // job.am has no publication date — its postedAt is an estimate from listing
+  // order, which is not something to stamp "new" on.
+  if (!job.postedAtEstimated && job.postedAt && Date.now() - job.postedAt < NEW_WITHIN_MS) {
+    out.push('🆕');
+  }
+  const days = job.deadline ? (Date.parse(job.deadline) - Date.now()) / (24 * 60 * 60 * 1000) : NaN;
+  if (days >= 0 && days <= URGENT_WITHIN_DAYS) out.push('🔥');
+  return out;
+};
+
 // One vacancy = one message (HTML parse mode). Each post is a self-contained
 // unit someone can forward to the one person it fits.
-export const formatJobPost = (job) =>
-  postBody(job, `${TAG_EMOJI[job.tag] || '🔹'} <b>${esc(job.title)}</b>`);
+export const formatJobPost = (job) => {
+  const marks = badges(job);
+  const title = `${TAG_EMOJI[job.tag] || '🔹'} <b>${esc(job.title)}</b>`;
+  return postBody(job, marks.length ? `${title} ${marks.join('')}` : title);
+};
 
 // The paid slot. Same skeleton as a normal post so it reads as a real vacancy,
 // wrapped in a marker + label that make the sponsorship obvious.

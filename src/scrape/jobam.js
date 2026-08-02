@@ -70,6 +70,7 @@ export const fetchJobAm = async () => {
         // ordered by recency, so stagger the first page to keep it fresh without
         // letting undated listings dominate every run forever.
         postedAt: now - (index * ESTIMATED_RECENCY_STEP_MS),
+        postedAtEstimated: true, // not a real date — never stamp it 🆕
         category: 'job.am IT/product',
         salary,
         deadline: parseDeadline(deadlineRaw),

@@ -1,0 +1,61 @@
+name: Post Queued Job
+
+on:
+  schedule:
+    # Every 30 minutes, 07:00-21:00 Yerevan (03:00-17:00 UTC). Most ticks find an
+    # empty queue and exit in seconds — the window is deliberately wider than the
+    # daily job supply so posts spread out instead of bunching up.
+    - cron: '*/30 3-17 * * *'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Preview the next post only (queue untouched)'
+        type: boolean
+        default: false
+
+# Shares cached state with the curate workflow — never run both at once.
+concurrency:
+  group: zrojobs-state
+  cancel-in-progress: false
+
+jobs:
+  drip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            seen.json
+            queue.json
+          key: state-${{ github.run_id }}
+          restore-keys: |
+            state-
+            seen-
+
+      - name: Post next queued job
+        run: npm run ${{ inputs.dry && 'drip:preview' || 'drip' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+
+      # always(): a post that Telegram accepted must leave the queue even if a
+      # later step fails, or it would go out twice.
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            seen.json
+            queue.json
+          key: state-${{ github.run_id }}

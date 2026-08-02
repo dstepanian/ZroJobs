@@ -9,6 +9,8 @@
     "start": "node src/index.js",
     "dry": "node src/index.js --dry",
     "preview": "node src/index.js --dry --print",
+    "drip": "node src/drip.js",
+    "drip:preview": "node src/drip.js --dry --print",
     "spotlight": "node src/spotlight.js",
     "spotlight:preview": "node src/spotlight.js --dry --print",
     "intro": "node src/intro.js",

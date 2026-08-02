@@ -51,10 +51,35 @@ Hashtags are what keep a vacancy findable after its notification scrolls away:
 tagged in Armenian, whatever language the source wrote them in, so one tag
 collects every posting for that city.
 
-Posts go out sequentially with a `POST_DELAY_MS` (default 3s) gap so Telegram's
-flood limit isn't hit; a 429 is retried once for as long as Telegram asks. Every
-successful send is recorded in `seen.json` immediately, so a failure halfway
-through a run leaves the unposted jobs eligible for the next one.
+A `🆕` badge means the source published the vacancy within the last day, `🔥`
+that its deadline is inside three days. Both are computed, never decorative — a
+badge that shows up on everything stops meaning anything. job.am is excluded from
+`🆕` because its listings carry no publication date (the scraper estimates one
+from listing order, which isn't something to stamp "new" on).
+
+## Curate twice, post all day
+
+Curation is expensive — eight sources scraped, two Gemini calls, a detail fetch
+per picked job — so it runs **twice a day** and writes rendered messages to
+`queue.json`. A second, tiny workflow **drips one post every 30 minutes**
+(07:00–21:00 Yerevan) until the queue is empty.
+
+```
+Curate Jobs (2×/day)  ─▶  queue.json  ─▶  Post Queued Job (*/30 min)  ─▶  Telegram
+   scrape + Gemini            ~10-20 waiting          one message per tick
+```
+
+This is why it isn't just a more frequent cron: running the full pipeline every
+30 minutes would hit the boards 48× a day (LinkedIn would rate-limit us quickly)
+and burn ~100 Gemini calls for the same handful of jobs.
+
+A job is marked in `seen.json` when it is **queued**, not when it is posted, so
+the next curation run doesn't pick it again while it waits its turn. A post that
+Telegram rejects stays at the head of the queue for the next tick and is retired
+after three failed attempts, so one bad entry can't block everything behind it.
+Entries older than 36 hours are dropped as stale. Both workflows share a
+`zrojobs-state` concurrency group — they read-modify-write the same cached
+`seen.json`/`queue.json` and must never run at once.
 
 ## Setup
 
@@ -67,13 +92,16 @@ through a run leaves the unposted jobs eligible for the next one.
 ## Run
 
 ```bash
-npm run preview   # dry run, prints every individual post to console (no posting)
-npm run dry       # dry run, no console print
-npm start         # scrapes, curates AND posts, recording each posted id as it goes
-npm run intro     # posts the pinned channel intro (one-off, see below)
+npm run preview       # dry run, prints every post it would queue (nothing written)
+npm run dry           # same, without the console print
+npm start             # scrapes, curates, and fills queue.json
+npm run drip:preview  # prints the next queued post without sending it
+npm run drip          # posts the next queued job and drops it from the queue
+npm run intro         # posts the pinned channel intro (one-off, see below)
 ```
 
-Dry runs never write `seen.json`, so you can preview as often as you like.
+Dry runs never write `seen.json` or `queue.json`, so you can preview as often as
+you like.
 
 ### Pinned intro post
 
@@ -93,11 +121,12 @@ out and the run says so.
 
 ## Scheduling (free)
 
-`.github/workflows/digest.yml` runs twice daily at **06:00 and 15:00 UTC
-(10:00 and 19:00 Yerevan)**.
+`.github/workflows/digest.yml` curates twice daily at **06:00 and 15:00 UTC
+(10:00 and 19:00 Yerevan)**; `.github/workflows/drip.yml` posts one queued job
+every 30 minutes between **03:00 and 17:00 UTC (07:00–21:00 Yerevan)**.
 Add the secrets in the repo: **Settings → Secrets and variables → Actions**
 (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`, `GEMINI_API_KEY`). Optional repo
-*variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`, `POST_DELAY_MS`. Use **Run
+*variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`. Use **Run
 workflow** on the Actions tab to fire a manual test.
 
 Each run reserves **2–4 slots for eligible international/remote jobs** from
@@ -179,10 +208,12 @@ line at the bottom of featured posts.
 | `src/fetchJobs.js` | parallel fetch, fail-soft per source |
 | `src/aggregate.js` | 7-day window, drop seen, dedupe, cap |
 | `src/seen.js` | `seen.json` load/mark/prune (30 days) |
+| `src/queue.js` | `queue.json` — enqueue, pop, retry/retire, 36h staleness |
 | `src/gemini.js` | shared Gemini JSON call (model fallback chain) |
 | `src/curate.js` | Gemini pass 1 (pick/tag/translate) + pass 2 (HY summaries from detail text) |
 | `src/format.js` | per-job post, featured post, hashtags, apply button, intro copy |
 | `src/post.js` | Telegram Bot API send (message, photo, pin) with flood-limit retry |
-| `src/index.js` | orchestrate the run — build the queue, post one by one |
+| `src/index.js` | orchestrate curation — build the posts, fill the queue |
+| `src/drip.js` | release one queued post per tick |
 | `src/intro.js` | one-off pinned channel intro |
 | `src/spotlight.js` | weekly "Employer of the week" photo post |

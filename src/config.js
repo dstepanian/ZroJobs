@@ -14,8 +14,6 @@ const config = {
   digestMax: Number(process.env.DIGEST_MAX || 10),
   internationalMin: Number(process.env.INTERNATIONAL_MIN || 2),
   internationalMax: Number(process.env.INTERNATIONAL_MAX || 4),
-  // Gap between the individual job posts of one run (Telegram flood limits).
-  postDelayMs: Number(process.env.POST_DELAY_MS || 3000),
   // CLI flags
   dry: process.argv.includes('--dry'),
   print: process.argv.includes('--print'),

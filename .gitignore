@@ -1,2 +1,4 @@
 node_modules/
 .env
+# Transient send queue — lives in the Actions cache between runs, not in git.
+queue.json

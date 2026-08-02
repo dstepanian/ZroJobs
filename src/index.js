@@ -5,9 +5,9 @@ import { enrichJobAmJob } from './scrape/jobam.js';
 import { enrichLinkedInJob } from './scrape/linkedin.js';
 import { enrichStaffAmJob } from './scrape/staffam.js';
 import {
-  applyKeyboard, featuredPhoto, formatFeaturedPost, formatJobPost, loadFeatured, plain, yerevanISO,
+  featuredPhoto, formatFeaturedPost, formatJobPost, loadFeatured, plain, yerevanISO,
 } from './format.js';
-import { postPhoto, postToTelegram, sleep } from './post.js';
+import { enqueue } from './queue.js';
 import { loadSeen, markSeen } from './seen.js';
 
 // Boards whose listing pages carry no description — without a detail fetch the
@@ -56,20 +56,16 @@ const fallbackMix = (candidates) => {
     .map((job) => ({ ...job, tag: job.tag || 'other-tech' }));
 };
 
-// Telegram photo captions cap at 1024 chars; a featured post that outgrows the
-// cap is sent as plain text rather than truncated.
-const CAPTION_LIMIT = 1000;
-
 // Paid listings live in featured.json, not in the job feed, so they get their
 // own seen.json key. The date in the key is what stops the same listing being
-// posted twice in one day while still letting it run again tomorrow.
+// queued twice in one day while still letting it run again tomorrow.
 const featuredId = (f, today) => {
   const slug = (f.url || `${f.company} ${f.title}`).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return `featured:${slug.slice(0, 80)}:${today}`;
 };
 
 // The run's messages, in send order: paid listings first, then curated jobs.
-const buildQueue = (jobs, today) => {
+const buildPosts = (jobs, today) => {
   const seen = loadSeen();
   const featured = loadFeatured()
     .map((f) => ({
@@ -84,27 +80,6 @@ const buildQueue = (jobs, today) => {
     text: formatJobPost(job),
     url: job.url,
   }))];
-};
-
-const preview = (post, n) => {
-  console.log(`\n----- POST ${n} -----\n`);
-  if (post.photo) console.log(`[photo] ${post.photo}`);
-  console.log(plain(post.text));
-  if (post.url) console.log(`\n[button] Դիմել → ${post.url}`);
-};
-
-// Send one message, preferring the photo card when the listing has a logo. A
-// dead image URL must never cost us the post, so it degrades to text.
-const send = async ({ text, photo, url }) => {
-  const replyMarkup = applyKeyboard(url);
-  if (photo && text.length <= CAPTION_LIMIT) {
-    try {
-      return await postPhoto(photo, text, config.channel, { replyMarkup });
-    } catch (e) {
-      console.warn(`[zrojobs] photo failed (${e.message}) — falling back to text`);
-    }
-  }
-  return postToTelegram(text, config.channel, { replyMarkup });
 };
 
 const run = async () => {
@@ -146,32 +121,30 @@ const run = async () => {
   }
 
   // One message per vacancy: five posts are five shareable units, each fully
-  // relevant to someone, instead of one digest relevant to almost nobody.
+  // relevant to someone, instead of one digest relevant to almost nobody. They
+  // go into the queue rather than out in a burst — src/drip.js releases them one
+  // at a time so the channel gets a steady stream through the day.
   const today = yerevanISO();
-  const queue = buildQueue(jobs, today);
+  const posts = buildPosts(jobs, today);
 
   if (config.dry) {
-    if (config.print) queue.forEach((post, i) => preview(post, i + 1));
-    console.log(`\n[zrojobs] dry run — ${queue.length} post(s), not posting`);
+    if (config.print) {
+      posts.forEach((post, i) => {
+        console.log(`\n----- POST ${i + 1} -----\n`);
+        if (post.photo) console.log(`[photo] ${post.photo}`);
+        console.log(plain(post.text));
+        if (post.url) console.log(`\n[button] Դիմել → ${post.url}`);
+      });
+    }
+    console.log(`\n[zrojobs] dry run — ${posts.length} post(s), not queued`);
     return;
   }
 
-  // Sequential with a gap, and each success recorded on the spot: if a send
-  // fails or the run dies halfway, the jobs we never posted stay eligible.
-  let posted = 0;
-  for (const [i, post] of queue.entries()) {
-    if (i) await sleep(config.postDelayMs);
-    try {
-      const result = await send(post);
-      markSeen([post.id], today);
-      posted++;
-      console.log(`[zrojobs] posted message ${result.message_id} (${post.id})`);
-    } catch (e) {
-      console.error(`[zrojobs] post failed for ${post.id}: ${e.message}`);
-    }
-  }
-
-  console.log(`[zrojobs] posted ${posted}/${queue.length} to ${config.channel}`);
+  // Seen at queue time, not at send time: a queued job is handled, and the next
+  // curation run must not pick it again while it waits its turn.
+  const { added, total } = enqueue(posts);
+  markSeen(posts.map((p) => p.id), today);
+  console.log(`[zrojobs] queued ${added} new post(s) — ${total} waiting`);
   console.log(`[zrojobs] seen.json now tracks ${Object.keys(loadSeen()).length} job(s)`);
 };
 

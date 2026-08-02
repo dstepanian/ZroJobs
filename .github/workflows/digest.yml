@@ -1,24 +1,31 @@
-name: Jobs Digest
+name: Curate Jobs
 
 on:
   schedule:
     # Yerevan is UTC+4 (no DST). 06:00 UTC = 10:00 Yerevan, 15:00 UTC = 19:00 Yerevan.
+    # Scraping eight sources and calling Gemini stays at twice a day; the drip
+    # workflow is what makes posting frequent.
     - cron: '0 6 * * *'
     - cron: '0 15 * * *'
   # Manual "Run workflow" from the Actions tab. Tick "dry" to read the fully
-  # curated output in the log without posting — the only way to see what Gemini
+  # curated output in the log without queueing — the only way to see what Gemini
   # actually produces, since the API key isn't available locally.
   workflow_dispatch:
     inputs:
       dry:
-        description: 'Preview only (no posting)'
+        description: 'Preview only (nothing queued)'
         type: boolean
         default: false
 
+# Both workflows read-modify-write the same cached seen.json/queue.json, so they
+# must never run at the same time.
+concurrency:
+  group: zrojobs-state
+  cancel-in-progress: false
+
 jobs:
-  digest:
+  curate:
     runs-on: ubuntu-latest
-    # Posting is sequential now (one message per vacancy, plus flood-limit waits).
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -30,18 +37,21 @@ jobs:
 
       - run: npm ci
 
-      # Restore the dedup state from cache. Unique key per run + a "seen-" prefix
-      # in restore-keys means each run picks up the most recent previous cache.
-      # On a miss, the seen.json committed in the repo acts as the seed.
-      - name: Restore seen.json
+      # Restore the dedup state and the pending queue. Unique key per run + a
+      # "state-" prefix in restore-keys means each run picks up the most recent
+      # previous cache. On a miss, the seen.json committed in the repo seeds it.
+      - name: Restore state
         uses: actions/cache/restore@v4
         with:
-          path: seen.json
-          key: seen-${{ github.run_id }}
+          path: |
+            seen.json
+            queue.json
+          key: state-${{ github.run_id }}
           restore-keys: |
+            state-
             seen-
 
-      - name: Post digest
+      - name: Curate and queue
         run: npm run ${{ inputs.dry && 'preview' || 'start' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -50,15 +60,14 @@ jobs:
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
           CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
           PROMO_CONTACT: ${{ vars.PROMO_CONTACT }}
-          POST_DELAY_MS: ${{ vars.POST_DELAY_MS }}
 
-      # Persist the updated dedup state as a fresh cache entry (no git commit to
-      # main, so it never collides with manual pushes). always(): posting is one
-      # message per job and each success is written to seen.json on the spot, so
-      # a run that dies partway must still persist what it already posted.
-      - name: Save seen.json
+      # always(): the queue and seen.json are written as the run goes, so a run
+      # that dies partway must still persist what it already handled.
+      - name: Save state
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: seen.json
-          key: seen-${{ github.run_id }}
+          path: |
+            seen.json
+            queue.json
+          key: state-${{ github.run_id }}

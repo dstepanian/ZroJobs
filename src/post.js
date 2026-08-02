@@ -1,4 +1,5 @@
 import config from './config.js';
+import { applyKeyboard } from './format.js';
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -50,6 +51,24 @@ export const postPhoto = (photo, caption, chatId = config.channel, { replyMarkup
     parse_mode: 'HTML',
     reply_markup: replyMarkup,
   });
+
+// Telegram photo captions cap at 1024 chars; a post that outgrows the cap goes
+// out as plain text rather than truncated.
+const CAPTION_LIMIT = 1000;
+
+// Send one queued post, preferring the photo card when the listing has a logo.
+// A dead image URL must never cost us the post, so it degrades to text.
+export const sendPost = async ({ text, photo, url }) => {
+  const replyMarkup = applyKeyboard(url);
+  if (photo && text.length <= CAPTION_LIMIT) {
+    try {
+      return await postPhoto(photo, text, config.channel, { replyMarkup });
+    } catch (e) {
+      console.warn(`[zrojobs] photo failed (${e.message}) — falling back to text`);
+    }
+  }
+  return postToTelegram(text, config.channel, { replyMarkup });
+};
 
 // Pin a message silently (used by the intro post; the bot must be channel admin).
 export const pinMessage = (messageId, chatId = config.channel) =>
