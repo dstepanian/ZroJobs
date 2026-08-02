@@ -1,19 +1,53 @@
 # ZroJobs
 
-Armenian tech-jobs **digest** bot. Twice a day it scrapes Armenian job boards,
+Armenian tech-jobs bot. Twice a day it scrapes Armenian job boards,
 official company/ecosystem boards, public Telegram channels, and curated remote feeds,
 then uses **Gemini Flash** to keep only real tech vacancies, dedupe cross-source
-reposts and summarize each in Armenian. It posts one clean bilingual digest to
-a Telegram channel. Free to run — no server, GitHub Actions cron does the
-scheduling.
+reposts and summarize each in Armenian. Each vacancy is posted to the Telegram
+channel as **its own message**. Free to run — no server, GitHub Actions cron does
+the scheduling.
 
 ```
 staff.am (IT cats) ─┐                                enrich picks
 job.am + LinkedIn   ├─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
-Remote feeds + TON  ┤    (new only,    (2-4 remote +  salary, descr.,   summarize   (HY/EN)  (2/day)
+Remote feeds + TON  ┤    (new only,    (2-4 remote +  salary, descr.,   summarize  (one post (2/day)
 EPAM Armenia        ┤
-t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one HY line)
+t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one HY line) per job)
 ```
+
+## Why one post per job
+
+A digest is one shareable unit that is fully relevant to almost nobody. Five
+separate posts are five shareable units, each fully relevant to *someone* —
+forwardable person-to-person ("this one's for you"), searchable in Telegram, and
+hashtaggable. Person-to-person forwarding is the channel's main growth engine.
+
+Each post carries the role and company in bold, salary when known, location or
+`Հեռավար`, a near deadline, one Armenian summary line, hashtags, and an inline
+**Դիմել** button linking to the vacancy:
+
+```
+💻 Senior Backend Engineer
+   Acme
+
+💰 $3,000–4,500
+📍 Երևան
+⏳ մինչև հուլիսի 31-ը
+Node.js, PostgreSQL, 5+ տարվա փորձ
+
+#IT #Երևան #senior          [ Դիմել ]
+```
+
+Hashtags are what keep a vacancy findable after its notification scrolls away:
+`#IT` on every post, the location (`#Երևան`, `#remote`, …) and the level
+(`#junior` / `#middle` / `#senior`) when the posting states one. Cities are always
+tagged in Armenian, whatever language the source wrote them in, so one tag
+collects every posting for that city.
+
+Posts go out sequentially with a `POST_DELAY_MS` (default 3s) gap so Telegram's
+flood limit isn't hit; a 429 is retried once for as long as Telegram asks. Every
+successful send is recorded in `seen.json` immediately, so a failure halfway
+through a run leaves the unposted jobs eligible for the next one.
 
 ## Setup
 
@@ -26,12 +60,22 @@ t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one
 ## Run
 
 ```bash
-npm run preview   # dry run, prints the digest to console (no posting)
+npm run preview   # dry run, prints every individual post to console (no posting)
 npm run dry       # dry run, no console print
-npm start         # scrapes, curates AND posts, then records posted ids in seen.json
+npm start         # scrapes, curates AND posts, recording each posted id as it goes
+npm run intro     # posts the pinned channel intro (one-off, see below)
 ```
 
 Dry runs never write `seen.json`, so you can preview as often as you like.
+
+### Pinned intro post
+
+`npm run intro:preview` prints it, `npm run intro` posts and pins it. The message
+explains in Armenian what the channel is, when it posts, which hashtags to search,
+and where an employer submits a vacancy — the handle comes from `CONTACT_HANDLE`
+(falling back to `PROMO_CONTACT`). Run it again after editing the copy; Telegram
+pins the newest message. Pinning needs the bot to be a channel admin — if it
+isn't, the post still goes out and the run says so.
 
 ## Scheduling (free)
 
@@ -39,10 +83,10 @@ Dry runs never write `seen.json`, so you can preview as often as you like.
 (10:00 and 19:00 Yerevan)**.
 Add the secrets in the repo: **Settings → Secrets and variables → Actions**
 (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL`, `GEMINI_API_KEY`). Optional repo
-*variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`. Use **Run
+*variables*: `GEMINI_MODEL`, `CHANNEL_HANDLE`, `PROMO_CONTACT`, `POST_DELAY_MS`. Use **Run
 workflow** on the Actions tab to fire a manual test.
 
-The digest reserves **2–4 slots for eligible international/remote jobs** from
+Each run reserves **2–4 slots for eligible international/remote jobs** from
 Remotive, TON Jobs, and We Work Remotely, then fills the remaining slots with
 Armenia-market jobs. Override the
 range with `INTERNATIONAL_MIN` and `INTERNATIONAL_MAX` if needed. Remote jobs
@@ -74,7 +118,9 @@ persists it in the Actions cache (pruned after 30 days), so a job is never poste
 
 ## Monetization: featured listings
 
-`featured.json` holds paid listings that render **pinned at the top with a ⭐**:
+`featured.json` holds paid listings. They are posted **first in the run**, before
+any curated job, marked with 💼 and a **Հովանավորվող** label, and — when a logo is
+available — sent as a photo card instead of plain text:
 
 ```json
 [
@@ -82,15 +128,25 @@ persists it in the Actions cache (pruned after 30 days), so a job is never poste
     "title": "Senior QA Engineer",
     "company": "Acme",
     "location": "Երևան",
+    "salary": "$3,000–4,500",
     "summaryHy": "Ավտոմատացված թեստավորում, 3+ տարի փորձ",
     "url": "https://example.com/apply",
+    "logo": "https://example.com/logo.png",
     "until": "2026-07-31"
   }
 ]
 ```
 
-Entries expire automatically after their `until` date. Set the `PROMO_CONTACT`
-variable (e.g. `@yourusername`) to advertise the option in the digest footer.
+Only `title` and `url` really matter; everything else renders when present. The
+logo is optional: without it, the company is looked up in `companies.json` and
+that entry's `logo` is reused. A dead image URL never costs the post — it falls
+back to text.
+
+Entries expire automatically after their `until` date (`YYYY-MM-DD`). A listing is
+posted **once per day**, not once per run, so a two-a-day schedule doesn't show
+the same ad twice in a row — it is tracked in `seen.json` under a `featured:…:<date>`
+key. Set `PROMO_CONTACT` (e.g. `@yourusername`) to print the "your vacancy here"
+line at the bottom of featured posts.
 
 ## Structure
 
@@ -109,6 +165,8 @@ variable (e.g. `@yourusername`) to advertise the option in the digest footer.
 | `src/seen.js` | `seen.json` load/mark/prune (30 days) |
 | `src/gemini.js` | shared Gemini JSON call (model fallback chain) |
 | `src/curate.js` | Gemini pass 1 (pick/tag/translate) + pass 2 (HY summaries from detail text) |
-| `src/format.js` | bilingual digest — salary 💰, near deadlines, featured listings |
-| `src/post.js` | Telegram Bot API send |
-| `src/index.js` | orchestrate the daily run |
+| `src/format.js` | per-job post, featured post, hashtags, apply button, intro copy |
+| `src/post.js` | Telegram Bot API send (message, photo, pin) with flood-limit retry |
+| `src/index.js` | orchestrate the run — build the queue, post one by one |
+| `src/intro.js` | one-off pinned channel intro |
+| `src/spotlight.js` | weekly "Employer of the week" photo post |

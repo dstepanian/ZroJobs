@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Armenian tech-jobs digest bot — staff.am + Telegram channels + Gemini Flash, posted daily to Telegram.",
+  "description": "Armenian tech-jobs bot — staff.am + Telegram channels + Gemini Flash, one Telegram post per vacancy.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -11,6 +11,8 @@
     "preview": "node src/index.js --dry --print",
     "spotlight": "node src/spotlight.js",
     "spotlight:preview": "node src/spotlight.js --dry --print",
+    "intro": "node src/intro.js",
+    "intro:preview": "node src/intro.js --dry --print",
     "test": "node --test"
   },
   "dependencies": {

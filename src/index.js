@@ -2,9 +2,11 @@ import config from './config.js';
 import { aggregate } from './aggregate.js';
 import { curate, summarize } from './curate.js';
 import { enrichStaffAmJob } from './scrape/staffam.js';
-import { formatDigest, yerevanISO } from './format.js';
-import { postToTelegram } from './post.js';
-import { markSeen } from './seen.js';
+import {
+  applyKeyboard, featuredPhoto, formatFeaturedPost, formatJobPost, loadFeatured, plain, yerevanISO,
+} from './format.js';
+import { postPhoto, postToTelegram, sleep } from './post.js';
+import { loadSeen, markSeen } from './seen.js';
 
 // Fetch detail pages for the picked staff.am jobs only (~10 requests, polite):
 // full description for the summarizer, salary/deadline for the digest itself.
@@ -41,6 +43,57 @@ const fallbackMix = (candidates) => {
   return [...international, ...armenia]
     .slice(0, config.digestMax)
     .map((job) => ({ ...job, tag: job.tag || 'other-tech' }));
+};
+
+// Telegram photo captions cap at 1024 chars; a featured post that outgrows the
+// cap is sent as plain text rather than truncated.
+const CAPTION_LIMIT = 1000;
+
+// Paid listings live in featured.json, not in the job feed, so they get their
+// own seen.json key. The date in the key is what stops the same listing being
+// posted twice in one day while still letting it run again tomorrow.
+const featuredId = (f, today) => {
+  const slug = (f.url || `${f.company} ${f.title}`).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return `featured:${slug.slice(0, 80)}:${today}`;
+};
+
+// The run's messages, in send order: paid listings first, then curated jobs.
+const buildQueue = (jobs, today) => {
+  const seen = loadSeen();
+  const featured = loadFeatured()
+    .map((f) => ({
+      id: featuredId(f, today),
+      text: formatFeaturedPost(f),
+      photo: featuredPhoto(f),
+      url: f.url,
+    }))
+    .filter((p) => !seen[p.id]);
+  return [...featured, ...jobs.map((job) => ({
+    id: job.id,
+    text: formatJobPost(job),
+    url: job.url,
+  }))];
+};
+
+const preview = (post, n) => {
+  console.log(`\n----- POST ${n} -----\n`);
+  if (post.photo) console.log(`[photo] ${post.photo}`);
+  console.log(plain(post.text));
+  if (post.url) console.log(`\n[button] Դիմել → ${post.url}`);
+};
+
+// Send one message, preferring the photo card when the listing has a logo. A
+// dead image URL must never cost us the post, so it degrades to text.
+const send = async ({ text, photo, url }) => {
+  const replyMarkup = applyKeyboard(url);
+  if (photo && text.length <= CAPTION_LIMIT) {
+    try {
+      return await postPhoto(photo, text, config.channel, { replyMarkup });
+    } catch (e) {
+      console.warn(`[zrojobs] photo failed (${e.message}) — falling back to text`);
+    }
+  }
+  return postToTelegram(text, config.channel, { replyMarkup });
 };
 
 const run = async () => {
@@ -81,24 +134,34 @@ const run = async () => {
     console.warn('[zrojobs] summarize failed, posting without summaries:', e.message);
   }
 
-  const text = formatDigest(jobs);
+  // One message per vacancy: five posts are five shareable units, each fully
+  // relevant to someone, instead of one digest relevant to almost nobody.
+  const today = yerevanISO();
+  const queue = buildQueue(jobs, today);
 
   if (config.dry) {
-    if (config.print) {
-      console.log('\n----- DIGEST PREVIEW -----\n');
-      console.log(text.replace(/<\/?b>/g, ''));
-      console.log('\n--------------------------\n');
-    }
-    console.log('[zrojobs] dry run — not posting');
+    if (config.print) queue.forEach((post, i) => preview(post, i + 1));
+    console.log(`\n[zrojobs] dry run — ${queue.length} post(s), not posting`);
     return;
   }
 
-  const result = await postToTelegram(text);
-  console.log(`[zrojobs] posted message ${result.message_id} to ${config.channel}`);
+  // Sequential with a gap, and each success recorded on the spot: if a send
+  // fails or the run dies halfway, the jobs we never posted stay eligible.
+  let posted = 0;
+  for (const [i, post] of queue.entries()) {
+    if (i) await sleep(config.postDelayMs);
+    try {
+      const result = await send(post);
+      markSeen([post.id], today);
+      posted++;
+      console.log(`[zrojobs] posted message ${result.message_id} (${post.id})`);
+    } catch (e) {
+      console.error(`[zrojobs] post failed for ${post.id}: ${e.message}`);
+    }
+  }
 
-  // Only jobs actually posted count as seen — the rest stay eligible tomorrow.
-  const count = markSeen(jobs.map((j) => j.id), yerevanISO());
-  console.log(`[zrojobs] seen.json now tracks ${count} job(s)`);
+  console.log(`[zrojobs] posted ${posted}/${queue.length} to ${config.channel}`);
+  console.log(`[zrojobs] seen.json now tracks ${Object.keys(loadSeen()).length} job(s)`);
 };
 
 run()

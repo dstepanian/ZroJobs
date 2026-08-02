@@ -30,6 +30,9 @@ export const yerevanISO = (d = new Date()) => {
 export const esc = (s = '') =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Strip the HTML we send to Telegram so dry-run previews read like the post.
+export const plain = (s = '') => s.replace(/<\/?b>|<a [^>]*>|<\/a>/g, '');
+
 const TAG_EMOJI = {
   dev: '💻', qa: '🧪', design: '🎨', product: '📦',
   data: '📊', devops: '⚙️', 'other-tech': '🖥️',
@@ -102,81 +105,156 @@ const fmtDeadline = (iso) => {
   return `մինչև ${MONTHS_HY[m - 1]} ${d}-ը`;
 };
 
-// One job entry: title line, then a detail line with salary, one-line Armenian
-// summary, near deadlines and the apply link.
-const jobBlock = ({ title, company, location, remote, tag, summaryHy, salary, deadline, url, source }, marker) => {
-  const who = [company, location || (remote ? 'Հեռավար' : '')].filter(Boolean).join(' · ');
-  // Title itself is the link (Telegram renders it in the accent color); a single
-  // ↗ glyph signals it's tappable without repeating "Դիտել →" on every row.
-  const titleHtml = url
-    ? `<a href="${esc(url)}"><b>${esc(title)} ↗</b></a>`
-    : `<b>${esc(title)}</b>`;
-  const head = `${marker} ${titleHtml}${who ? ` — ${esc(who)}` : ''}`;
-  const tail = [
-    salary && `💰 ${esc(salary)}`,
-    summaryHy && esc(summaryHy),
-    fmtDeadline(deadline),
-    ['Remotive', 'TON Jobs', 'We Work Remotely'].includes(source) && source,
-  ].filter(Boolean).join(' · ');
-  return tail ? `${head}\n      ${tail}` : head;
+// Location strings that only say "this job is remote" — they carry no place, so
+// the post shows "Հեռավար" instead of repeating them.
+const PLACELESS = /^\s*(հեռավար|remote|anywhere.*|worldwide|global|international|work from home)\s*$/i;
+
+// A vacancy counts as remote when the scraper said so, when it came from an
+// international board, or when the location is one of those markers.
+const isRemote = (job) =>
+  !!job.remote || job.market === 'international' || PLACELESS.test(job.location || '');
+
+// Telegram only indexes hashtags made of letters, digits and underscores, and
+// ignores ones starting with a digit — drop anything that can't be searched.
+const hashtag = (s) => {
+  const word = (s || '').trim().replace(/[\s\-/]+/g, '_').replace(/[^\p{L}\p{N}_]/gu, '');
+  return word && !/^\d/.test(word) ? `#${word}` : '';
 };
 
-// Telegram text messages cap at 4096 chars; leave slack for the entities overhead.
-const TEXT_LIMIT = 3900;
+// Cities are tagged in Armenian whatever language the source wrote them in, so
+// one tag collects every posting for a city. Matched loosely on purpose: job.am
+// writes districts ("Kanaker-Zeytun, Yerevan"), which still belong to #Երևան.
+const CITIES_HY = [
+  [/yerevan|երևան|ереван/i, 'Երևան'],
+  [/gyumri|գյումրի|гюмри/i, 'Գյումրի'],
+  [/vanadzor|վանաձոր|ванадзор/i, 'Վանաձոր'],
+  [/armavir|արմավիր/i, 'Արմավիր'],
+  [/abovyan|աբովյան/i, 'Աբովյան'],
+  [/hrazdan|հրազդան/i, 'Հրազդան'],
+  [/dilijan|դիլիջան/i, 'Դիլիջան'],
+  [/ijevan|իջևան/i, 'Իջևան'],
+  [/kapan|կապան/i, 'Կապան'],
+];
 
-// Build the daily digest (HTML parse mode). Featured (paid) listings render
-// first with a star; curated jobs follow with a per-category emoji.
-export const formatDigest = (jobs, { date } = {}) => {
-  const out = [];
-  out.push(`💼 <b>Օրվա IT աշխատատեղերը — ${date || yerevanDate()}</b>`);
-  out.push('');
+// #junior / #middle / #senior, but only when the level is actually stated —
+// the title first, then the "Level:"/"Seniority:" line detail pages carry.
+const seniorityOf = ({ title = '', text = '' }) => {
+  const stated = (text.match(/^(?:Level|Seniority):\s*(.+)$/mi) || [])[1] || '';
+  for (const src of [title, stated]) {
+    if (/\b(senior|sr\.?|lead|principal|staff|head|architect)\b/i.test(src)) return 'senior';
+    if (/\b(middle|mid|mid-level)\b/i.test(src)) return 'middle';
+    if (/\b(junior|jr\.?|intern|trainee|entry[- ]level)\b/i.test(src)) return 'junior';
+  }
+  return '';
+};
 
-  const international = jobs.filter((j) => j.market === 'international');
-  const armenia = jobs.filter((j) => j.market !== 'international');
-  const blocks = [
-    ...loadFeatured().map((f) => jobBlock(f, '⭐')),
-    ...(international.length
-      ? [
-        '🌍 <b>Միջազգային / հեռավար աշխատատեղեր</b>',
-        ...international.map((j) => jobBlock(j, '🌍')),
-      ]
-      : []),
-    ...(armenia.length
-      ? [
-        '🇦🇲 <b>Հայաստանի աշխատատեղեր</b>',
-        ...armenia.map((j) => jobBlock(j, TAG_EMOJI[j.tag] || '🔹')),
-      ]
-      : []),
+// Hashtags are how a job stays findable after its notification scrolls away:
+// #IT for the feed, the location, and the level when we know it.
+export const hashtags = (job) => {
+  const tags = ['#IT'];
+  const remote = isRemote(job);
+  const location = (job.location || '').trim();
+  const city = CITIES_HY.find(([re]) => re.test(location))?.[1];
+  if (city) tags.push(`#${city}`);
+  else if (!remote && !/[,\s]/.test(location)) {
+    // Unmapped single-word place (Sisian, Berd...). Multi-word strings would
+    // only produce a tag nobody will ever search for.
+    const other = hashtag(location);
+    if (other) tags.push(other);
+  }
+  if (remote) tags.push('#remote');
+  const level = seniorityOf(job);
+  if (level) tags.push(`#${level}`);
+  return tags.join(' ');
+};
+
+// Where the job is: city, "Հեռավար", or both. International boards are credited
+// here too, since that's the only place their name still fits.
+const CREDITED_SOURCES = ['Remotive', 'TON Jobs', 'We Work Remotely'];
+const whereLine = (job) => {
+  const location = (job.location || '').trim();
+  const bits = [PLACELESS.test(location) ? '' : location, isRemote(job) && 'Հեռավար'].filter(Boolean);
+  if (CREDITED_SOURCES.includes(job.source)) bits.push(job.source);
+  return bits.length ? `📍 ${esc(bits.join(' · '))}` : '';
+};
+
+// One-line summaries occasionally come back long; a post should stay scannable.
+const SUMMARY_LIMIT = 300;
+const clip = (s, limit) => (s.length > limit ? `${s.slice(0, limit - 1).trimEnd()}…` : s);
+
+// Shared body of every vacancy post: salary, where, deadline, the Armenian
+// one-liner. The apply link lives in the inline button, not in the text.
+const detailLines = (job) => [
+  // Free-text salaries arrive with stray double spaces from the boards.
+  job.salary && `💰 ${esc(job.salary.replace(/\s+/g, ' ').trim())}`,
+  whereLine(job),
+  fmtDeadline(job.deadline) && `⏳ ${fmtDeadline(job.deadline)}`,
+  job.summaryHy && esc(clip(job.summaryHy.trim(), SUMMARY_LIMIT)),
+].filter(Boolean).join('\n');
+
+// Role + company, both bold. Sections are joined blank-line-separated and empty
+// ones dropped, so a bare posting never leaves a hole in the message.
+const postBody = (job, head) => [
+  [head, job.company && `<b>${esc(job.company)}</b>`].filter(Boolean).join('\n'),
+  detailLines(job),
+  hashtags(job),
+].filter(Boolean).join('\n\n');
+
+// One vacancy = one message (HTML parse mode). Each post is a self-contained
+// unit someone can forward to the one person it fits.
+export const formatJobPost = (job) =>
+  postBody(job, `${TAG_EMOJI[job.tag] || '🔹'} <b>${esc(job.title)}</b>`);
+
+// The paid slot. Same skeleton as a normal post so it reads as a real vacancy,
+// wrapped in a marker + label that make the sponsorship obvious.
+export const formatFeaturedPost = (job) => {
+  const out = ['💼 <b>Հովանավորվող</b>', postBody(job, `<b>${esc(job.title)}</b>`)];
+  if (config.promoContact) {
+    out.push(`➖➖➖➖➖\n💬 Ձեր վականսիան այստեղ՝ ${esc(config.promoContact)}`);
+  }
+  return out.join('\n\n');
+};
+
+// Featured entries can carry their own image; otherwise reuse the logo already
+// curated in companies.json for that employer.
+const normName = (s = '') => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+export const featuredPhoto = (job) => {
+  if (job.logo) return job.logo;
+  const key = normName(job.company);
+  if (key.length < 3) return '';
+  const hit = loadCompanies().find((c) => {
+    const name = normName(c.name);
+    return name && c.logo && (name === key || name.startsWith(key) || key.startsWith(name));
+  });
+  return hit?.logo || '';
+};
+
+// The apply button — one tap from the post to the vacancy, and it keeps the
+// link out of the body so the text stays clean when forwarded.
+export const applyKeyboard = (url) =>
+  (url ? { inline_keyboard: [[{ text: 'Դիմել', url }]] } : undefined);
+
+// Pinned channel intro: what this is, when it posts, how to submit a vacancy.
+export const formatIntro = () => {
+  const out = [
+    '📌 <b>ZroJobs — IT աշխատանք Հայաստանում</b>',
+    '',
+    'Այստեղ հրապարակվում են Հայաստանի և հեռավար IT թափուր աշխատատեղերը՝ '
+      + 'յուրաքանչյուրը առանձին հայտարարությամբ, որպեսզի հեշտ լինի ուղարկել այն մարդուն, ում պետք է։',
+    '',
+    '🕙 Հրապարակվում է օրական երկու անգամ՝ 10:00 և 19:00 (Երևան)։',
+    '',
+    '🔎 Որոնեք հեշթեգերով՝ #IT #Երևան #remote #junior #middle #senior',
   ];
-
-  const footer = [];
-  footer.push('➖➖➖➖➖➖➖➖➖➖');
-  // "Company of the day": a light, verified one-liner riding along in the footer
-  // — Armenian-IT-ecosystem discovery without spending a separate notification.
-  const cod = companyOfDay();
-  if (cod) {
-    const name = cod.url
-      ? `<a href="${esc(cod.url)}"><b>${esc(cod.name)}</b></a>`
-      : `<b>${esc(cod.name)}</b>`;
-    footer.push(`🏢 Օրվա ընկերությունը՝ ${name} — ${esc(cod.factHy)}`);
-    footer.push('');
+  if (config.contact) {
+    out.push(
+      '',
+      `💼 Գործատո՞ւ եք։ Ուղարկեք ձեր վականսիան՝ ${esc(config.contact)} — `
+        + 'հովանավորվող հայտարարությունը հրապարակվում է առաջինը՝ ընկերության լոգոյով։',
+    );
   }
-  const promo = config.promoContact
-    ? `  |  Առաջխաղացում՝ ${esc(config.promoContact)}`
-    : '';
   const handle = config.channelHandle ? `  |  ${esc(config.channelHandle)}` : '';
-  footer.push(`⚡ <b>${esc(config.siteUrl)}</b>${handle}${promo}`);
-
-  // Add job blocks until the message would blow the Telegram limit.
-  const footerLen = footer.join('\n').length;
-  for (const block of blocks) {
-    const current = out.join('\n').length;
-    if (current + block.length + footerLen + 4 > TEXT_LIMIT) break;
-    out.push(block);
-    out.push('');
-  }
-
-  out.push(...footer);
+  out.push('', `⚡ <b>${esc(config.siteUrl)}</b>${handle}`);
   return out.join('\n');
 };
 

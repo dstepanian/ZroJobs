@@ -10,7 +10,8 @@ on:
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Posting is sequential now (one message per vacancy, plus flood-limit waits).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +42,7 @@ jobs:
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
           CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
           PROMO_CONTACT: ${{ vars.PROMO_CONTACT }}
+          POST_DELAY_MS: ${{ vars.POST_DELAY_MS }}
 
       # Persist the updated dedup state as a fresh cache entry (no git commit to
       # main, so it never collides with manual pushes).

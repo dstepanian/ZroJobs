@@ -1,47 +1,60 @@
 import config from './config.js';
 
-// Post the digest to the Telegram channel via the Bot API (no deps).
-export const postToTelegram = async (text, chatId = config.channel) => {
-  if (!config.token || !chatId) {
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Single place that talks to the Bot API. Posting a run as many separate
+// messages makes the per-channel flood limit reachable, so a 429 is retried
+// once for exactly as long as Telegram asks.
+const api = async (method, payload, retry = true) => {
+  if (!config.token || !payload.chat_id) {
     throw new Error('TELEGRAM_BOT_TOKEN or chat id missing');
   }
 
-  const res = await fetch(`https://api.telegram.org/bot${config.token}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${config.token}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json();
-  if (!data.ok) throw new Error(`Telegram error: ${data.description}`);
-  return data.result;
-};
-
-// Post a photo card (company spotlight). `photo` is a URL, a local file path,
-// or a reusable Telegram file_id; caption is HTML, capped by Telegram at 1024
-// chars. Kept separate from the digest so a failure here can't affect it.
-export const postPhoto = async (photo, caption, chatId = config.channel) => {
-  if (!config.token || !chatId) {
-    throw new Error('TELEGRAM_BOT_TOKEN or chat id missing');
+  if (!data.ok) {
+    const wait = data.parameters?.retry_after;
+    if (wait && retry) {
+      console.warn(`[zrojobs] flood limit — waiting ${wait}s`);
+      await sleep((wait + 1) * 1000);
+      return api(method, payload, false);
+    }
+    throw new Error(`Telegram error: ${data.description}`);
   }
-
-  const res = await fetch(`https://api.telegram.org/bot${config.token}/sendPhoto`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      photo,
-      caption,
-      parse_mode: 'HTML',
-    }),
-  });
-
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Telegram error: ${data.description}`);
   return data.result;
 };
+
+// Post one message (HTML). `replyMarkup` carries the inline apply button.
+export const postToTelegram = (text, chatId = config.channel, { replyMarkup } = {}) =>
+  api('sendMessage', {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup,
+  });
+
+// Post a photo card (featured listing, company spotlight). `photo` is a URL, a
+// local file path, or a reusable Telegram file_id; caption is HTML, capped by
+// Telegram at 1024 chars. Callers fall back to text when the image fails.
+export const postPhoto = (photo, caption, chatId = config.channel, { replyMarkup } = {}) =>
+  api('sendPhoto', {
+    chat_id: chatId,
+    photo,
+    caption,
+    parse_mode: 'HTML',
+    reply_markup: replyMarkup,
+  });
+
+// Pin a message silently (used by the intro post; the bot must be channel admin).
+export const pinMessage = (messageId, chatId = config.channel) =>
+  api('pinChatMessage', {
+    chat_id: chatId,
+    message_id: messageId,
+    disable_notification: true,
+  });
