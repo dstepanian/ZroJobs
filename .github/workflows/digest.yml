@@ -5,7 +5,15 @@ on:
     # Yerevan is UTC+4 (no DST). 06:00 UTC = 10:00 Yerevan, 15:00 UTC = 19:00 Yerevan.
     - cron: '0 6 * * *'
     - cron: '0 15 * * *'
-  workflow_dispatch: {} # allow manual "Run workflow" from the Actions tab
+  # Manual "Run workflow" from the Actions tab. Tick "dry" to read the fully
+  # curated output in the log without posting — the only way to see what Gemini
+  # actually produces, since the API key isn't available locally.
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Preview only (no posting)'
+        type: boolean
+        default: false
 
 jobs:
   digest:
@@ -34,7 +42,7 @@ jobs:
             seen-
 
       - name: Post digest
-        run: npm start
+        run: npm run ${{ inputs.dry && 'preview' || 'start' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}

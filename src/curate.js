@@ -172,21 +172,29 @@ export const curate = async (jobs) => {
 
 // ---- Pass 2: one-line Armenian summaries from the enriched detail text. ----
 
-const buildSummaryPrompt = (jobs) => `
-You write one-line summaries for a tech-jobs Telegram digest in Eastern Armenian.
-For each numbered job below, write "summaryHy": ONE short line with what a
-job-seeker scans for — tech stack, years of experience required, and standout
-conditions (flexible hours, relocation, equity...). Keep technology names in
-English (React, Node.js, Python). No fluff, no restating the obvious.
+// Each vacancy is its own Telegram post now, so a job gets a few short bullets
+// instead of the single line the old shared-message digest could afford.
+const MAX_POINTS = 3;
 
-Do NOT mention the title, company, location, salary or deadline — the digest
-shows those separately. If the details add nothing beyond the title, return ""
-for that job.
+const buildSummaryPrompt = (jobs) => `
+You write the body of a tech-job post for a Telegram channel, in Eastern Armenian.
+For each numbered job below, write "points": 1-${MAX_POINTS} very short lines
+covering, in this order and only where the posting actually says so:
+1. what the person will work on and the tech stack,
+2. the experience / level required,
+3. one standout condition (flexible hours, relocation, hybrid, equity, courses...).
+
+Rules:
+- Each line stands alone, max ~90 characters, no trailing period.
+- Keep technology names in English (React, Node.js, Python, Kubernetes).
+- Never mention the title, company, location, salary or deadline — the post shows
+  those separately. Never invent anything the posting doesn't state.
+- If the posting genuinely says nothing beyond the title, return an empty list.
 
 Return ONLY JSON matching the schema. No markdown, no commentary.
 
 Jobs:
-${jobs.map((j, n) => `${n + 1}. ${j.title} @ ${j.company || '?'}\n${(j.text || '').slice(0, 1200) || '(no details)'}`).join('\n---\n')}
+${jobs.map((j, n) => `${n + 1}. ${j.title} @ ${j.company || '?'}\n${(j.text || '').slice(0, 1800) || '(no details)'}`).join('\n---\n')}
 `.trim();
 
 const summarySchema = {
@@ -198,22 +206,30 @@ const summarySchema = {
         type: 'object',
         properties: {
           index: { type: 'integer' },
-          summaryHy: { type: 'string' },
+          points: { type: 'array', items: { type: 'string' } },
         },
-        required: ['index', 'summaryHy'],
+        required: ['index', 'points'],
       },
     },
   },
   required: ['items'],
 };
 
-// Mutates nothing; returns the jobs with summaryHy attached where Gemini had
-// something to say. Callers treat a failure as "no summaries".
+// Mutates nothing; returns the jobs with summaryHy attached (bullet per line)
+// where Gemini had something to say. Callers treat a failure as "no summaries".
 export const summarize = async (jobs) => {
   if (!jobs.length) return jobs;
   const parsed = await generateJson(buildSummaryPrompt(jobs), summarySchema);
   const byIndex = new Map(
-    (Array.isArray(parsed.items) ? parsed.items : []).map((it) => [it.index, (it.summaryHy || '').trim()]),
+    (Array.isArray(parsed.items) ? parsed.items : []).map((it) => [it.index, it.points]),
   );
-  return jobs.map((j, n) => ({ ...j, summaryHy: byIndex.get(n + 1) || '' }));
+  return jobs.map((j, n) => ({
+    ...j,
+    summaryHy: (byIndex.get(n + 1) || [])
+      .map((p) => (p || '').trim())
+      .filter(Boolean)
+      .slice(0, MAX_POINTS)
+      .map((p) => `• ${p}`)
+      .join('\n'),
+  }));
 };

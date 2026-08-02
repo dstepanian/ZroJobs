@@ -1,6 +1,8 @@
 import config from './config.js';
 import { aggregate } from './aggregate.js';
 import { curate, summarize } from './curate.js';
+import { enrichJobAmJob } from './scrape/jobam.js';
+import { enrichLinkedInJob } from './scrape/linkedin.js';
 import { enrichStaffAmJob } from './scrape/staffam.js';
 import {
   applyKeyboard, featuredPhoto, formatFeaturedPost, formatJobPost, loadFeatured, plain, yerevanISO,
@@ -8,13 +10,22 @@ import {
 import { postPhoto, postToTelegram, sleep } from './post.js';
 import { loadSeen, markSeen } from './seen.js';
 
-// Fetch detail pages for the picked staff.am jobs only (~10 requests, polite):
-// full description for the summarizer, salary/deadline for the digest itself.
+// Boards whose listing pages carry no description — without a detail fetch the
+// summarizer has nothing to say and the post ends up as a bare title.
+const ENRICHERS = {
+  'staffam:': enrichStaffAmJob,
+  'jobam:': enrichJobAmJob,
+  'linkedin:': enrichLinkedInJob,
+};
+
+// Fetch detail pages for the picked jobs only (one request each, ~10 per run):
+// full description for the summarizer, salary/deadline/seniority for the post.
 const enrich = (jobs) =>
   Promise.all(jobs.map(async (job) => {
-    if (!job.id.startsWith('staffam:')) return job;
+    const enricher = ENRICHERS[Object.keys(ENRICHERS).find((p) => job.id.startsWith(p))];
+    if (!enricher) return job;
     try {
-      return await enrichStaffAmJob(job);
+      return await enricher(job);
     } catch (e) {
       console.warn(`[zrojobs] detail fetch failed for ${job.id}: ${e.message}`);
       return job;

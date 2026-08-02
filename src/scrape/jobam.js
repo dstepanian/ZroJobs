@@ -31,14 +31,17 @@ const parseDeadline = (raw = '') => {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 };
 
-export const fetchJobAm = async () => {
-  const res = await fetch(LISTING_URL, {
+const get = async (url) => {
+  const res = await fetch(url, {
     headers: { 'user-agent': UA, 'accept-language': 'en-US,en;q=0.9' },
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`job.am ${res.status}`);
+  return res.text();
+};
 
-  const html = await res.text();
+export const fetchJobAm = async () => {
+  const html = await get(LISTING_URL);
   const cards = html.split('<div class="jobs-card"').slice(1);
   const now = Date.now();
 
@@ -81,4 +84,20 @@ export const fetchJobAm = async () => {
     })
     .filter(Boolean)
     .slice(0, MAX_JOBS);
+};
+
+// The listing card carries no description at all — only the detail page has the
+// duties/requirements the summarizer needs, so picked jobs get one fetch each.
+// The description goes first: the summary prompt only reads the opening chars.
+const DESCRIPTION_RE =
+  /<div class="about-container job-descr work-description[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i;
+
+export const parseJobAmDescription = (html) =>
+  stripHtml(html.match(DESCRIPTION_RE)?.[1] || '').replace(/^Նկարագրություն\s*/, '');
+
+// Callers treat a failure as "no enrichment", never as a fatal error.
+export const enrichJobAmJob = async (job) => {
+  const description = parseJobAmDescription(await get(job.url));
+  if (!description) return job;
+  return { ...job, text: [description.slice(0, 1500), job.text].filter(Boolean).join('\n') };
 };

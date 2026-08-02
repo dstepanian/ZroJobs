@@ -38,6 +38,13 @@ Node.js, PostgreSQL, 5+ տարվա փորձ
 #IT #Երևան #senior          [ Դիմել ]
 ```
 
+The Armenian body is 1–3 short bullets (what you'll work on and the stack, the
+experience required, one standout condition), written by Gemini from the
+vacancy's **detail page** — staff.am, job.am and LinkedIn listings carry no
+description, so the picked jobs get one detail fetch each before summarizing. If
+a posting genuinely says nothing beyond its title, the card falls back to its
+category (`🏷 Ծրագրավորում`) rather than shipping as a bare title.
+
 Hashtags are what keep a vacancy findable after its notification scrolls away:
 `#IT` on every post, the location (`#Երևան`, `#remote`, …) and the level
 (`#junior` / `#middle` / `#senior`) when the posting states one. Cities are always
@@ -161,6 +168,8 @@ line at the bottom of featured posts.
 |------|------|
 | `src/sources.js` | staff.am category ids + Telegram channel list |
 | `src/scrape/staffam.js` | staff.am `__NEXT_DATA__` scraper — listing + detail enrichment (salary, description, deadline) |
+| `src/scrape/jobam.js` | job.am listing + detail enrichment (description) |
+| `src/scrape/linkedin.js` | LinkedIn guest search + guest posting detail (description, seniority) |
 | `src/scrape/telegram.js` | generic `t.me/s/` channel scraper |
 | `src/scrape/remotive.js` | Remotive public remote-jobs feed, filtered for technical and broad-location roles |
 | `src/scrape/weworkremotely.js` | Official WWR RSS feeds, filtered for technical Armenia-accessible roles |

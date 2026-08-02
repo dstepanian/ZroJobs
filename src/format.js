@@ -178,18 +178,28 @@ const whereLine = (job) => {
   return bits.length ? `📍 ${esc(bits.join(' · '))}` : '';
 };
 
-// One-line summaries occasionally come back long; a post should stay scannable.
-const SUMMARY_LIMIT = 300;
+// A standalone post can afford a few bullets, but a card still has to be
+// scannable in the notification preview.
+const SUMMARY_LIMIT = 450;
 const clip = (s, limit) => (s.length > limit ? `${s.slice(0, limit - 1).trimEnd()}…` : s);
 
+// What the job is about, in Armenian, for cards the summarizer couldn't fill —
+// better a category than a post that is nothing but a title.
+const TAG_HY = {
+  dev: 'Ծրագրավորում', qa: 'Թեստավորում', design: 'Դիզայն', product: 'Փրոդուկտ/նախագծերի կառավարում',
+  data: 'Տվյալներ', devops: 'DevOps / ինֆրակառուցվածք', 'other-tech': 'ՏՏ ոլորտ',
+};
+
 // Shared body of every vacancy post: salary, where, deadline, the Armenian
-// one-liner. The apply link lives in the inline button, not in the text.
+// bullets. The apply link lives in the inline button, not in the text.
 const detailLines = (job) => [
   // Free-text salaries arrive with stray double spaces from the boards.
   job.salary && `💰 ${esc(job.salary.replace(/\s+/g, ' ').trim())}`,
   whereLine(job),
   fmtDeadline(job.deadline) && `⏳ ${fmtDeadline(job.deadline)}`,
-  job.summaryHy && esc(clip(job.summaryHy.trim(), SUMMARY_LIMIT)),
+  job.summaryHy
+    ? esc(clip(job.summaryHy.trim(), SUMMARY_LIMIT))
+    : TAG_HY[job.tag] && `🏷 ${TAG_HY[job.tag]}`,
 ].filter(Boolean).join('\n');
 
 // Role + company, both bold. Sections are joined blank-line-separated and empty

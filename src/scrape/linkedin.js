@@ -60,6 +60,36 @@ const parsePage = (html, query) => html
   .filter(Boolean)
   .slice(0, MAX_PER_QUERY);
 
+// Search cards carry no description either. The guest posting endpoint (same
+// no-auth surface as the search page) returns the full text plus the criteria
+// block, whose "Seniority level" is what drives the #junior/#middle/#senior tag.
+const DETAIL_URL = (id) => `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`;
+const DESCRIPTION_RE = /show-more-less-html__markup[^>]*>([\s\S]*?)<\/div>/i;
+const CRITERIA_RE = /criteria-subheader[^>]*>([\s\S]*?)<\/h3>[\s\S]*?criteria-text[^>]*>([\s\S]*?)<\/span>/gi;
+const WANTED_CRITERIA = { 'Seniority level': 'Seniority', 'Employment type': 'Employment' };
+
+export const parseLinkedInDetail = (html) => {
+  const description = stripHtml(html.match(DESCRIPTION_RE)?.[1] || '');
+  const criteria = [...html.matchAll(CRITERIA_RE)]
+    .map(([, label, value]) => [WANTED_CRITERIA[stripHtml(label)], stripHtml(value)])
+    // "Not Applicable" is LinkedIn's way of saying the employer left it blank.
+    .filter(([label, value]) => label && value && value !== 'Not Applicable')
+    .map(([label, value]) => `${label}: ${value}`);
+  return [description.slice(0, 1500), ...criteria].filter(Boolean).join('\n');
+};
+
+// Callers treat a failure as "no enrichment", never as a fatal error.
+export const enrichLinkedInJob = async (job) => {
+  const res = await fetch(DETAIL_URL(job.id.replace('linkedin:', '')), {
+    headers: { 'user-agent': UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`LinkedIn ${res.status}`);
+
+  const detail = parseLinkedInDetail(await res.text());
+  return detail ? { ...job, text: [detail, job.text].filter(Boolean).join('\n') } : job;
+};
+
 export const fetchLinkedIn = async () => {
   const pages = await Promise.all(LINKEDIN_QUERIES.map(async (query) => {
     try {

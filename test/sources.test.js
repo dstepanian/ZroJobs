@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { takeSourceDiverse } from '../src/aggregate.js';
 import { parseEpamJobs } from '../src/scrape/epam.js';
+import { parseJobAmDescription } from '../src/scrape/jobam.js';
+import { parseLinkedInDetail } from '../src/scrape/linkedin.js';
 import { isArmeniaAccessible } from '../src/scrape/remoteScope.js';
 import { parseTonJobs } from '../src/scrape/ton.js';
 import { parseWwrFeed } from '../src/scrape/weworkremotely.js';
@@ -109,6 +111,46 @@ test('WWR parser decodes RSS and filters non-technical jobs', () => {
   assert.equal(jobs[0].company, 'Acme');
   assert.equal(jobs[0].source, 'We Work Remotely');
   assert.match(jobs[0].text, /Node\.js & PostgreSQL/);
+});
+
+test('job.am detail parser returns the description without its heading', () => {
+  const html = `<html><div class="about-container job-descr work-description pb-30">
+    <h4>Նկարագրություն</h4><p>Փնտրում ենք Node.js ծրագրավորողի։</p><ul><li>3+ տարվա փորձ</li></ul>
+  </div></div></html>`;
+
+  const text = parseJobAmDescription(html);
+  assert.match(text, /Node\.js ծրագրավորողի/);
+  assert.match(text, /3\+ տարվա փորձ/);
+  assert.doesNotMatch(text, /^Նկարագրություն/);
+});
+
+test('LinkedIn detail parser keeps the description and stated criteria only', () => {
+  const html = `<html>
+    <div class="show-more-less-html__markup">Build APIs with &lt;b&gt;Go&lt;/b&gt; and PostgreSQL.</div>
+    <h3 class="description__job-criteria-subheader">Seniority level</h3>
+    <span class="description__job-criteria-text">Mid-Senior level</span>
+    <h3 class="description__job-criteria-subheader">Employment type</h3>
+    <span class="description__job-criteria-text">Full-time</span>
+    <h3 class="description__job-criteria-subheader">Industries</h3>
+    <span class="description__job-criteria-text">Financial Services</span>
+  </html>`;
+
+  const text = parseLinkedInDetail(html);
+  assert.match(text, /Build APIs with/);
+  assert.match(text, /^Seniority: Mid-Senior level$/m);
+  assert.match(text, /^Employment: Full-time$/m);
+  // Industries isn't shown anywhere, so it stays out of the summarizer's budget.
+  assert.doesNotMatch(text, /Financial Services/);
+});
+
+test('LinkedIn detail parser drops the criteria the employer left blank', () => {
+  const html = `<html>
+    <div class="show-more-less-html__markup">Ship things.</div>
+    <h3 class="description__job-criteria-subheader">Seniority level</h3>
+    <span class="description__job-criteria-text">Not Applicable</span>
+  </html>`;
+
+  assert.equal(parseLinkedInDetail(html), 'Ship things.');
 });
 
 test('international candidate selection rotates across sources', () => {

@@ -40,11 +40,24 @@ test('a job post keeps role, company, details and tags in separate blocks', () =
   ].join('\n'));
 });
 
-test('a bare posting leaves no empty block behind', () => {
+test('a posting with no summary falls back to its category, never a bare title', () => {
   assert.equal(
     formatJobPost({ title: 'Разработчик', tag: 'dev' }),
-    '💻 <b>Разработчик</b>\n\n#IT',
+    '💻 <b>Разработчик</b>\n\n🏷 Ծրագրավորում\n\n#IT',
   );
+});
+
+test('summary bullets replace the category line and survive intact', () => {
+  const post = formatJobPost({
+    title: 'Backend Engineer',
+    company: 'Acme',
+    location: 'Երևան',
+    tag: 'dev',
+    summaryHy: '• Node.js և PostgreSQL միկրոսերվիսներ\n• 3+ տարվա փորձ\n• Հիբրիդ գրաֆիկ',
+  });
+
+  assert.match(post, /• Node\.js և PostgreSQL միկրոսերվիսներ\n• 3\+ տարվա փորձ\n• Հիբրիդ գրաֆիկ/);
+  assert.doesNotMatch(post, /🏷/);
 });
 
 test('a featured post is labelled and carries the same details', () => {
