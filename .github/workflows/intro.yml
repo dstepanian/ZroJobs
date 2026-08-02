@@ -1,0 +1,35 @@
+name: Channel Intro
+
+# Manual only — the intro is a one-off pinned post, re-run after editing the copy.
+# Defaults to a preview so a stray "Run workflow" can't post and pin by accident.
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Preview only (no posting, no pinning)'
+        type: boolean
+        default: true
+
+jobs:
+  intro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Post channel intro
+        run: npm run ${{ inputs.dry && 'intro:preview' || 'intro' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          CONTACT_HANDLE: ${{ vars.CONTACT_HANDLE }}
+          PROMO_CONTACT: ${{ vars.PROMO_CONTACT }}

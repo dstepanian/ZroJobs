@@ -70,12 +70,19 @@ Dry runs never write `seen.json`, so you can preview as often as you like.
 
 ### Pinned intro post
 
-`npm run intro:preview` prints it, `npm run intro` posts and pins it. The message
-explains in Armenian what the channel is, when it posts, which hashtags to search,
-and where an employer submits a vacancy — the handle comes from `CONTACT_HANDLE`
-(falling back to `PROMO_CONTACT`). Run it again after editing the copy; Telegram
-pins the newest message. Pinning needs the bot to be a channel admin — if it
-isn't, the post still goes out and the run says so.
+The message explains in Armenian what the channel is, when it posts, which
+hashtags to search, and where an employer submits a vacancy — the handle comes
+from `CONTACT_HANDLE` (falling back to `PROMO_CONTACT`). Run it again after
+editing the copy; Telegram pins the newest message.
+
+Easiest way to send it is the **Channel Intro** workflow on the Actions tab
+(`.github/workflows/intro.yml`) — it uses the secrets already in the repo, and
+defaults to preview-only, so untick **Preview only** to actually post. Locally,
+`npm run intro:preview` / `npm run intro` do the same but need a `.env` with
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHANNEL`.
+
+Pinning needs the bot to be a channel admin — if it isn't, the post still goes
+out and the run says so.
 
 ## Scheduling (free)
 
