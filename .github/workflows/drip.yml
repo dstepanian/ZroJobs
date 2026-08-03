@@ -38,6 +38,7 @@ jobs:
           path: |
             seen.json
             queue.json
+            jobs.json
           key: state-${{ github.run_id }}
           restore-keys: |
             state-
@@ -58,4 +59,5 @@ jobs:
           path: |
             seen.json
             queue.json
+            jobs.json
           key: state-${{ github.run_id }}

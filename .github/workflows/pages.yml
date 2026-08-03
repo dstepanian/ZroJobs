@@ -1,0 +1,79 @@
+name: Publish Job Site
+
+# Rebuilds after every curation run, so a new vacancy is crawlable within
+# minutes of being picked.
+on:
+  workflow_run:
+    workflows: ['Curate Jobs']
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # A failed curation run has nothing new to publish.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            seen.json
+            queue.json
+            jobs.json
+          key: state-${{ github.run_id }}
+          restore-keys: |
+            state-
+
+      # The published site carries its own jobs.json, so an evicted cache costs
+      # us nothing: the last deploy is the backup.
+      - name: Recover the archive from the live site if the cache is gone
+        env:
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL || 'https://dstepanian.github.io/ZroJobs' }}
+        run: |
+          if [ ! -s jobs.json ]; then
+            echo "cache miss — trying $SITE_BASE_URL/jobs.json"
+            curl -sfL "$SITE_BASE_URL/jobs.json" -o jobs.json || echo '[]' > jobs.json
+          fi
+          node -e "console.log('archive holds', JSON.parse(require('fs').readFileSync('jobs.json')).length, 'record(s)')"
+
+      # Refuses to build an empty site rather than deindex every page we have.
+      - name: Build site
+        run: npm run site
+        env:
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+          CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -159,6 +159,46 @@ persists it in the Actions cache (pruned after 30 days), so a job is never poste
 - **We Work Remotely** — official public programming, product, design, and
   DevOps RSS feeds, with source attribution and location eligibility filtering.
 
+## The public job site (Google discoverability)
+
+Telegram posts are not indexable — `t.me/s/<channel>` is the only crawlable
+surface Telegram offers, it only exists while the channel's web preview is on,
+and it ranks poorly for job queries. So every curated vacancy is also kept as a
+structured record in `jobs.json` and published as a static site.
+
+```bash
+npm run site   # builds site/ from jobs.json
+```
+
+Each vacancy gets its own page carrying
+[JobPosting](https://developers.google.com/search/docs/appearance/structured-data/job-posting)
+structured data — title, `datePosted`, `validThrough`, hiring organization,
+location (or `TELECOMMUTE` + Armenian applicant eligibility for remote roles) —
+which is what makes a listing eligible for the **Google Jobs** widget above
+normal search results. Plus an index page, `sitemap.xml` and `robots.txt`.
+
+Deliberate choices worth knowing:
+
+- **We publish our own Armenian summary, not the scraped description.** Re-hosting
+  another board's description verbatim is duplicate content Google discounts, and
+  not ours to republish. Each page links out to the original posting instead.
+- **Salary reaches the markup only when it parses unambiguously.** Our own
+  formatters emit `$3,000–6,000` and `250,000 ֏`; free-text salaries are shown on
+  the page but left out of the structured data, because a wrong salary in Google
+  Jobs is worse than no salary.
+- **Expired vacancies are removed** — once `deadline` passes, or after 45 days
+  without one. Google requires this.
+- **An empty archive aborts the build** rather than deploying a site with no
+  pages, which would deindex everything.
+
+`.github/workflows/pages.yml` rebuilds and deploys after each successful curation
+run. The published site includes its own `jobs.json`, so if the Actions cache is
+ever evicted the next build recovers the archive from the live site.
+
+**One-time setup:** repo **Settings → Pages → Source: GitHub Actions**. If you
+serve it from a custom domain, set the `SITE_BASE_URL` repo variable to match
+exactly (canonical URLs and the sitemap are absolute).
+
 ## Monetization: featured listings
 
 `featured.json` holds paid listings. They are posted **first in the run**, before
@@ -209,6 +249,9 @@ line at the bottom of featured posts.
 | `src/aggregate.js` | 7-day window, drop seen, dedupe, cap |
 | `src/seen.js` | `seen.json` load/mark/prune (30 days) |
 | `src/queue.js` | `queue.json` — enqueue, pop, retry/retire, 36h staleness |
+| `src/archive.js` | `jobs.json` — structured records behind the public site, expiry rules |
+| `src/render.js` | job page / index / sitemap / robots + JobPosting structured data |
+| `src/site.js` | builds `site/` from the archive |
 | `src/gemini.js` | shared Gemini JSON call (model fallback chain) |
 | `src/curate.js` | Gemini pass 1 (pick/tag/translate) + pass 2 (HY summaries from detail text) |
 | `src/format.js` | per-job post, featured post, hashtags, apply button, intro copy |

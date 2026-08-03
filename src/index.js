@@ -1,5 +1,6 @@
 import config from './config.js';
 import { aggregate } from './aggregate.js';
+import { archive } from './archive.js';
 import { curate, summarize } from './curate.js';
 import { enrichJobAmJob } from './scrape/jobam.js';
 import { enrichLinkedInJob } from './scrape/linkedin.js';
@@ -145,6 +146,10 @@ const run = async () => {
   const { added, total } = enqueue(posts);
   markSeen(posts.map((p) => p.id), today);
   console.log(`[zrojobs] queued ${added} new post(s) — ${total} waiting`);
+
+  // The same jobs, kept as structured records for the public site — Telegram
+  // posts aren't indexable, so this is what Google actually gets to see.
+  console.log(`[zrojobs] archive now holds ${archive(jobs)} live vacancy record(s)`);
   console.log(`[zrojobs] seen.json now tracks ${Object.keys(loadSeen()).length} job(s)`);
 };
 
