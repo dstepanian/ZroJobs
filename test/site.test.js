@@ -16,9 +16,17 @@ const job = {
   publishedAt: '2026-08-01T10:00:00.000Z',
 };
 
-test('slugs stay ascii even when the title is not', () => {
-  assert.equal(slug(job), 'senior-backend-engineer-staffam-123');
-  assert.match(slug({ id: 'jobam:77', title: 'Ծրագրավորող' }), /^jobam-77$/);
+test('slugs stay ascii, short and unique even when the title is not', () => {
+  assert.match(slug(job), /^senior-backend-engineer-[0-9a-f]{8}$/);
+  assert.match(slug({ id: 'jobam:77', title: 'Ծրագրավորող' }), /^job-[0-9a-f]{8}$/);
+
+  // A board whose id is itself the title must not repeat it in the URL.
+  const wwr = slug({ id: 'wwr:stripe-staff-product-manager-ml', title: 'Staff Product Manager, ML' });
+  assert.equal(wwr.match(/product/g).length, 1);
+  assert.ok(wwr.length < 60, `slug should stay short, got ${wwr.length}`);
+
+  // Same title at two companies must not collide.
+  assert.notEqual(slug({ id: 'a:1', title: 'QA Engineer' }), slug({ id: 'b:2', title: 'QA Engineer' }));
 });
 
 test('JobPosting carries the fields Google requires', () => {

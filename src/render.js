@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import config from './config.js';
 import { esc } from './format.js';
 
-// Slugs must survive Armenian and Russian titles, so the id — always ascii —
-// carries uniqueness and the title is a best-effort readable prefix.
+// Slugs must survive Armenian and Russian titles, so a short digest of the id
+// carries uniqueness and the title is a best-effort readable prefix. The digest
+// rather than the id itself: some boards use the full title as their id, which
+// put the title in the URL twice and made it read as keyword stuffing.
 export const slug = (job) => {
   const words = (job.title || '')
     .toLowerCase()
@@ -12,8 +15,8 @@ export const slug = (job) => {
     .filter(Boolean)
     .slice(0, 6)
     .join('-');
-  const id = job.id.replace(/[^a-zA-Z0-9]+/g, '-');
-  return words ? `${words}-${id}` : id;
+  const digest = createHash('sha1').update(job.id).digest('hex').slice(0, 8);
+  return words ? `${words}-${digest}` : `job-${digest}`;
 };
 
 export const jobPath = (job) => `jobs/${slug(job)}.html`;
