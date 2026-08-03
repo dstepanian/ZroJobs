@@ -1,3 +1,4 @@
+import { decodeEntities } from '../text.js';
 import { isArmeniaAccessible, isTechnicalRole, tagForRole } from './remoteScope.js';
 
 const LISTING_URL = 'https://jobs.ton.org/jobs';
@@ -26,8 +27,8 @@ export const parseTonJobs = (html) => {
 
       return {
         id: `ton:${job.id}`,
-        title: job.title.trim(),
-        company: (job.organization?.name || '').trim(),
+        title: decodeEntities(job.title).trim(),
+        company: decodeEntities(job.organization?.name || '').trim(),
         location,
         remote: job.workMode === 'remote' || /remote/i.test(location),
         url: new URL(job.url, LISTING_URL).toString(),

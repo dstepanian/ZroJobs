@@ -1,4 +1,4 @@
-import { stripHtml } from '../text.js';
+import { decodeEntities, stripHtml } from '../text.js';
 import { isArmeniaAccessible, tagForRole } from './remoteScope.js';
 
 // Remotive publishes a public JSON feed for sharing remote jobs, with the
@@ -24,8 +24,8 @@ export const fetchRemotive = async () => {
       const description = stripHtml(job.description || '');
       return {
         id: `remotive:${job.id}`,
-        title: job.title.trim(),
-        company: (job.company_name || '').trim(),
+        title: decodeEntities(job.title).trim(),
+        company: decodeEntities(job.company_name || '').trim(),
         location: scope || 'Remote',
         remote: true,
         url: job.url,
@@ -34,7 +34,8 @@ export const fetchRemotive = async () => {
         postedAt: Date.parse(job.publication_date || '') || Date.now(),
         category: job.category,
         tag: tagForRole(job.title, job.category),
-        salary: (job.salary || '').trim(),
+        // Remotive writes salaries HTML-encoded ("&#036;120 - &#036;170 /hour").
+        salary: decodeEntities(job.salary || '').trim(),
         text: [
           description.slice(0, 1400),
           scope && `Candidate location: ${scope}`,

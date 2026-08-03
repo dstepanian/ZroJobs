@@ -5,6 +5,7 @@ import { parseEpamJobs } from '../src/scrape/epam.js';
 import { parseJobAmDescription } from '../src/scrape/jobam.js';
 import { parseLinkedInDetail } from '../src/scrape/linkedin.js';
 import { isArmeniaAccessible } from '../src/scrape/remoteScope.js';
+import { decodeEntities } from '../src/text.js';
 import { parseTonJobs } from '../src/scrape/ton.js';
 import { parseWwrFeed } from '../src/scrape/weworkremotely.js';
 
@@ -151,6 +152,32 @@ test('LinkedIn detail parser drops the criteria the employer left blank', () => 
   </html>`;
 
   assert.equal(parseLinkedInDetail(html), 'Ship things.');
+});
+
+test('feed fields are decoded, so no HTML entity reaches Telegram verbatim', () => {
+  // Remotive writes salaries HTML-encoded; esc() would turn the & into &amp;
+  // and readers would see the literal "&#036;120".
+  assert.equal(decodeEntities('&#036;120 - &#036;170 /hour'), '$120 - $170 /hour');
+  assert.equal(decodeEntities('Ben &amp; Co'), 'Ben & Co');
+  assert.equal(decodeEntities('&#x27;quoted&#x27;'), "'quoted'");
+  // Single pass only: a double-encoded entity must not decode into a real one.
+  assert.equal(decodeEntities('&amp;#036;'), '&#036;');
+});
+
+test('WWR splits the company off an escaped RSS title', () => {
+  const xml = `
+    <rss><channel><item>
+      <title>Ben &amp; Co: Senior Backend Engineer</title>
+      <region>Anywhere in the World</region>
+      <category>Back-End Programming</category>
+      <description>&lt;p&gt;Node.js&lt;/p&gt;</description>
+      <pubDate>Wed, 15 Jul 2026 10:00:00 +0000</pubDate>
+      <link>https://weworkremotely.com/remote-jobs/ben-co-senior-backend-engineer</link>
+    </item></channel></rss>`;
+
+  const [job] = parseWwrFeed(xml);
+  assert.equal(job.company, 'Ben & Co');
+  assert.equal(job.title, 'Senior Backend Engineer');
 });
 
 test('international candidate selection rotates across sources', () => {

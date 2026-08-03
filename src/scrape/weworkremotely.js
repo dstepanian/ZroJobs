@@ -1,4 +1,4 @@
-import { stripHtml } from '../text.js';
+import { decodeEntities, stripHtml } from '../text.js';
 import { isArmeniaAccessible, isTechnicalRole, tagForRole } from './remoteScope.js';
 
 const FEEDS = [
@@ -25,7 +25,9 @@ const field = (item, name) => decodeXml(
   item.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'))?.[1] || '',
 );
 
-const splitTitle = (value) => {
+// RSS titles arrive XML-escaped ("Acme &amp; Co: Senior Engineer").
+const splitTitle = (raw) => {
+  const value = decodeEntities(raw);
   const separator = value.indexOf(': ');
   if (separator < 1) return { company: '', title: value.trim() };
   return {
