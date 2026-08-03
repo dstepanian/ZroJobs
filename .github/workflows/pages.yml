@@ -63,7 +63,12 @@ jobs:
           SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
           CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
 
+      # enablement: switches the Pages source to "GitHub Actions" itself. Without
+      # it this step fails whenever Pages is set to deploy from a branch.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
