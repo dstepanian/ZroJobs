@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isLive } from '../src/archive.js';
-import { jobPostingLd, parseSalary, renderJobPage, renderSitemap, slug } from '../src/render.js';
+import {
+  faqLd, jobPostingLd, organizationLd, parseSalary, renderAbout, renderIndex,
+  renderJobPage, renderLlms, renderRobots, renderSitemap, slug,
+} from '../src/render.js';
 
 const job = {
   id: 'staffam:123',
@@ -68,10 +71,11 @@ test('the rendered page embeds valid, non-breaking JSON-LD', () => {
   assert.match(html, /rel="nofollow noopener"/, 'outbound apply links are not endorsements');
 });
 
-test('sitemap lists the index and every job, in a valid namespace', () => {
+test('sitemap lists the index, the about page and every job, in a valid namespace', () => {
   const xml = renderSitemap([job]);
   assert.match(xml, /xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9"/);
-  assert.equal([...xml.matchAll(/<loc>/g)].length, 2);
+  assert.equal([...xml.matchAll(/<loc>/g)].length, 3);
+  assert.match(xml, /<loc>[^<]*\/about\/<\/loc>/);
 });
 
 test('a vacancy leaves the site once its deadline passes', () => {
@@ -81,4 +85,79 @@ test('a vacancy leaves the site once its deadline passes', () => {
   // No deadline stated — falls back to the 45-day window.
   assert.equal(isLive({ publishedAt: '2026-07-20T00:00:00Z' }, now), true);
   assert.equal(isLive({ publishedAt: '2026-05-01T00:00:00Z' }, now), false);
+});
+
+// Every other page is one vacancy. Nothing on the site answered "what is
+// ZroJobs", which is the question a search engine or an assistant is actually
+// asked. These lock the page that does.
+test('the about page states what the channel is, in both languages', () => {
+  const html = renderAbout();
+  assert.match(html, /ZroJobs-ը հայալեզու Telegram ալիք է/);
+  assert.match(html, /Armenian-language Telegram channel/);
+  assert.match(html, /<section lang="en">/);
+});
+
+// The footer used to fall back to "ZroJobs" when CHANNEL_HANDLE was unset, and
+// @ZroJobs is an unclaimed username, not this channel — every such link was a
+// dead end. The fallback now comes from the registry.
+test('the channel handle never falls back to the unclaimed @ZroJobs', () => {
+  for (const html of [renderAbout(), renderJobPage(job)]) {
+    assert.match(html, /https:\/\/t\.me\/zrojob\b/);
+    assert.doesNotMatch(html, /t\.me\/ZroJobs\b/);
+  }
+});
+
+test('the about page publishes its Q&A as FAQPage structured data', () => {
+  const faq = faqLd();
+  assert.equal(faq['@type'], 'FAQPage');
+  assert.ok(faq.mainEntity.length >= 5);
+  for (const q of faq.mainEntity) {
+    assert.equal(q['@type'], 'Question');
+    assert.equal(q.acceptedAnswer['@type'], 'Answer');
+    assert.ok(q.acceptedAnswer.text.length > 20, `answer too thin: ${q.name}`);
+  }
+});
+
+// sameAs is what merges the domain, the Telegram handle and the portfolio into
+// one entity. Drop it and they are five unrelated pages sharing a word.
+test('the organization node claims the Telegram handle and both siblings', () => {
+  const org = organizationLd();
+  assert.equal(org['@type'], 'Organization');
+  assert.deepEqual(org.sameAs, [
+    'https://t.me/zrojob',
+    'https://zromek.de',
+    'https://crypto.zromek.de',
+    'https://ai.zromek.de',
+  ]);
+});
+
+test('the index carries the entity graph it previously had no structured data for', () => {
+  const html = renderIndex([job]);
+  const block = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  assert.ok(block, 'index has no JSON-LD');
+  const types = JSON.parse(block[1])['@graph'].map((n) => n['@type']);
+  assert.deepEqual(types, ['Organization', 'WebSite']);
+});
+
+test('every page links out to both sibling channels', () => {
+  for (const html of [renderAbout(), renderJobPage(job), renderIndex([job])]) {
+    assert.match(html, /https:\/\/crypto\.zromek\.de\//);
+    assert.match(html, /https:\/\/ai\.zromek\.de\//);
+  }
+});
+
+test('robots.txt names the AI crawlers rather than relying on the wildcard', () => {
+  const robots = renderRobots();
+  for (const ua of ['GPTBot', 'OAI-SearchBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended']) {
+    assert.match(robots, new RegExp(`User-agent: ${ua}\nAllow: /`), `${ua} not allowed`);
+  }
+});
+
+test('llms.txt describes the channel in English and points at the siblings', () => {
+  const txt = renderLlms([job]);
+  assert.match(txt, /^# ZroJobs\n/);
+  assert.match(txt, /Armenian-language Telegram channel/);
+  assert.match(txt, /@zroaix/);
+  assert.match(txt, /@zrocry/);
+  assert.match(txt, /Senior Backend Engineer/);
 });

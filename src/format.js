@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from './config.js';
+import { promoLines, channelOf } from './siblings.js';
+import { fieldOf, roleOf } from './taxonomy.js';
+import { decodeEntities } from './text.js';
 
 const MONTHS_HY = [
   'հունվարի', 'փետրվարի', 'մարտի', 'ապրիլի', 'մայիսի', 'հունիսի',
@@ -31,12 +34,12 @@ export const esc = (s = '') =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Strip the HTML we send to Telegram so dry-run previews read like the post.
-export const plain = (s = '') => s.replace(/<\/?b>|<a [^>]*>|<\/a>/g, '');
-
-const TAG_EMOJI = {
-  dev: '💻', qa: '🧪', design: '🎨', product: '📦',
-  data: '📊', devops: '⚙️', 'other-tech': '🖥️',
-};
+// Entities are decoded as well as tags: a title like "Product & Design" is sent
+// correctly as "Product &amp; Design" and Telegram renders the ampersand, so a
+// preview that printed the escape would be reporting a bug that isn't there.
+// The preview only earns its keep if it shows what subscribers actually see.
+export const plain = (s = '') =>
+  decodeEntities(s.replace(/<\/?b>|<a [^>]*>|<\/a>/g, ''));
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FEATURED_FILE = path.join(ROOT, 'featured.json');
@@ -149,9 +152,15 @@ const seniorityOf = ({ title = '', text = '' }) => {
 };
 
 // Hashtags are how a job stays findable after its notification scrolls away:
-// #IT for the feed, the location, and the level when we know it.
+// the field it belongs to, then the role, the location, and the level when we
+// know it. #IT alone used to do all of that work, which made a channel posting
+// 10-20 vacancies a day one undifferentiated stream. The field hashtag is also
+// what keeps the two feeds separable now that marketing shares the channel: a
+// reader who only wants IT can follow #IT and never see the rest.
 export const hashtags = (job) => {
-  const tags = ['#IT'];
+  const tags = [fieldOf(job.tag).hashtag];
+  const role = roleOf(job.tag).hashtag;
+  if (role) tags.push(role);
   const remote = isRemote(job);
   const location = (job.location || '').trim();
   const city = CITIES_HY.find(([re]) => re.test(location))?.[1];
@@ -183,13 +192,6 @@ const whereLine = (job) => {
 const SUMMARY_LIMIT = 450;
 const clip = (s, limit) => (s.length > limit ? `${s.slice(0, limit - 1).trimEnd()}…` : s);
 
-// What the job is about, in Armenian, for cards the summarizer couldn't fill —
-// better a category than a post that is nothing but a title.
-const TAG_HY = {
-  dev: 'Ծրագրավորում', qa: 'Թեստավորում', design: 'Դիզայն', product: 'Փրոդուկտ/նախագծերի կառավարում',
-  data: 'Տվյալներ', devops: 'DevOps / ինֆրակառուցվածք', 'other-tech': 'ՏՏ ոլորտ',
-};
-
 // Shared body of every vacancy post: salary, where, deadline, the Armenian
 // bullets. The apply link lives in the inline button, not in the text.
 const detailLines = (job) => [
@@ -197,17 +199,41 @@ const detailLines = (job) => [
   job.salary && `💰 ${esc(job.salary.replace(/\s+/g, ' ').trim())}`,
   whereLine(job),
   fmtDeadline(job.deadline) && `⏳ ${fmtDeadline(job.deadline)}`,
+  // What the job is about, in Armenian, for cards the summarizer couldn't fill.
+  // Better a category than a post that is nothing but a title.
   job.summaryHy
     ? esc(clip(job.summaryHy.trim(), SUMMARY_LIMIT))
-    : TAG_HY[job.tag] && `🏷 ${TAG_HY[job.tag]}`,
+    : job.tag && `🏷 ${roleOf(job.tag).hy}`,
 ].filter(Boolean).join('\n');
 
 // Role + company, both bold. Sections are joined blank-line-separated and empty
 // ones dropped, so a bare posting never leaves a hole in the message.
+// Forwarding is this channel's growth engine, but a forward only carries
+// attribution while Telegram's "Forwarded from" header survives — and most of
+// the spread here is screenshots into WhatsApp and Viber groups, which carry
+// nothing at all. The handle rides along on the hashtag line so a screenshot is
+// still a path back to the channel. Own handle only: a vacancy post is the
+// wrong place for a sibling-channel pitch, since it goes out 10-20× a day.
+const tagLine = (job) => {
+  const own = config.channelHandle || channelOf('jobs')?.handle || '';
+  const tags = hashtags(job);
+  return own ? `${tags} · ${esc(own)}` : tags;
+};
+
+const fieldLabel = (job) => {
+  const field = fieldOf(job.tag);
+  return field.labelHy ? `${field.labelEmoji} <b>${field.labelHy}</b>` : '';
+};
+
 const postBody = (job, head) => [
+  // The field label, on the fields that have one. Only marketing does: IT is
+  // what subscribers already expect from this channel, so it stays unlabelled
+  // and the label reads as "this one is the other thing" rather than as
+  // decoration repeated on every post.
+  fieldLabel(job),
   [head, job.company && `<b>${esc(job.company)}</b>`].filter(Boolean).join('\n'),
   detailLines(job),
-  hashtags(job),
+  tagLine(job),
 ].filter(Boolean).join('\n\n');
 
 // Badges are earned, never decorative: 🆕 means the source published it within
@@ -232,7 +258,7 @@ export const badges = (job) => {
 // unit someone can forward to the one person it fits.
 export const formatJobPost = (job) => {
   const marks = badges(job);
-  const title = `${TAG_EMOJI[job.tag] || '🔹'} <b>${esc(job.title)}</b>`;
+  const title = `${job.tag ? roleOf(job.tag).emoji : '🔹'} <b>${esc(job.title)}</b>`;
   return postBody(job, marks.length ? `${title} ${marks.join('')}` : title);
 };
 
@@ -241,7 +267,7 @@ export const formatJobPost = (job) => {
 export const formatFeaturedPost = (job) => {
   const out = ['💼 <b>Հովանավորվող</b>', postBody(job, `<b>${esc(job.title)}</b>`)];
   if (config.promoContact) {
-    out.push(`➖➖➖➖➖\n💬 Ձեր վականսիան այստեղ՝ ${esc(config.promoContact)}`);
+    out.push(`➖➖➖➖➖\n💬 Ձեր աշխատատեղն այստեղ՝ ${esc(config.promoContact)}`);
   }
   return out.join('\n\n');
 };
@@ -268,24 +294,32 @@ export const applyKeyboard = (url) =>
 // Pinned channel intro: what this is, when it posts, how to submit a vacancy.
 export const formatIntro = () => {
   const out = [
-    '📌 <b>ZroJobs — IT աշխատանք Հայաստանում</b>',
+    '📌 <b>ZroJobs | Աշխատանք</b>',
     '',
-    'Այստեղ հրապարակվում են Հայաստանի և հեռավար IT թափուր աշխատատեղերը՝ '
+    'Այստեղ հրապարակվում են Հայաստանի և հեռավար թափուր աշխատատեղերը՝ '
       + 'յուրաքանչյուրը առանձին հայտարարությամբ, որպեսզի հեշտ լինի ուղարկել այն մարդուն, ում պետք է։',
     '',
     '🕙 Հրապարակվում է օրական երկու անգամ՝ 10:00 և 19:00 (Երևան)։',
     '',
-    '🔎 Որոնեք հեշթեգերով՝ #IT #Երևան #remote #junior #middle #senior',
+    '💻 <b>ՏՏ</b>՝ #IT',
+    '#dev #QA #AI #data #devops #design #product',
+    '',
+    '📣 <b>ՄԱՐՔԵԹԻՆԳ</b>՝ #marketing',
+    '#brand #content #SMM #PR #performance',
+    '',
+    '📍 Ըստ վայրի և մակարդակի՝ #Երևան #remote #junior #middle #senior',
   ];
   if (config.contact) {
     out.push(
       '',
-      `💼 Գործատո՞ւ եք։ Ուղարկեք ձեր վականսիան՝ ${esc(config.contact)} — `
+      `💼 Գործատո՞ւ եք։ Ուղարկեք ձեր աշխատատեղը՝ ${esc(config.contact)} — `
         + 'հովանավորվող հայտարարությունը հրապարակվում է առաջինը՝ ընկերության լոգոյով։',
     );
   }
-  const handle = config.channelHandle ? `  |  ${esc(config.channelHandle)}` : '';
-  out.push('', `⚡ <b>${esc(config.siteUrl)}</b>${handle}`);
+  out.push('', ...promoLines('jobs', {
+    siteUrl: esc(config.siteUrl),
+    ownHandle: esc(config.channelHandle),
+  }));
   return out.join('\n');
 };
 
@@ -301,9 +335,13 @@ export const formatSpotlight = ({ name, blurbHy, url }) => {
   const out = ['🏢 <b>Այս շաբաթվա գործատուն</b>', '', title];
   if (blurbHy) {
     let blurb = blurbHy.trim();
-    if (blurb.length > CAPTION_LIMIT - 120) blurb = `${blurb.slice(0, CAPTION_LIMIT - 121).trimEnd()}…`;
+    // Reserve room for the title plus the three-line cross-promo footer.
+    if (blurb.length > CAPTION_LIMIT - 200) blurb = `${blurb.slice(0, CAPTION_LIMIT - 201).trimEnd()}…`;
     out.push('', esc(blurb));
   }
-  out.push('', `⚡ <b>${esc(config.siteUrl)}</b>${config.channelHandle ? `  |  ${esc(config.channelHandle)}` : ''}`);
+  out.push('', ...promoLines('jobs', {
+    siteUrl: esc(config.siteUrl),
+    ownHandle: esc(config.channelHandle),
+  }));
   return out.join('\n');
 };

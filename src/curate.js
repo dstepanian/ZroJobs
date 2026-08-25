@@ -1,7 +1,7 @@
 import config from './config.js';
 import { generateJson } from './gemini.js';
-
-const TAGS = ['dev', 'qa', 'design', 'product', 'data', 'devops', 'other-tech'];
+import { roleTag } from './scrape/remoteScope.js';
+import { TAGS, isMarketing, tagsOfField } from './taxonomy.js';
 
 const describe = (job, n) => {
   const bits = [
@@ -16,37 +16,53 @@ const describe = (job, n) => {
   return bits.join(' | ');
 };
 
-// ---- Pass 1: pick the best tech jobs (no summaries yet — the picked jobs get
+// ---- Pass 1: pick the best jobs (no summaries yet — the picked jobs get
 // enriched with detail-page text first, then summarized in pass 2). ----
 
 const buildPickPrompt = (jobs, min, max, internationalMin, internationalMax) => `
-You are the editor of a daily Armenian tech-jobs digest on Telegram.
+You are the editor of a daily Armenian jobs digest on Telegram.
 Below are ${jobs.length} candidate postings scraped from job boards and Telegram
-channels (mixed Armenian/English/Russian, mixed quality, some are not tech jobs).
+channels (mixed Armenian/English/Russian, mixed quality, many are neither of the
+two fields this channel posts).
 
 Your job:
-1. Keep ONLY tech/IT vacancies: software development, QA, UI/UX & web design,
-   product/project management in tech, data, DevOps/infra. Drop everything else
-   (sales, admin, finance, driving, ads, courses, resumes, non-job posts).
+1. Keep ONLY vacancies in the two fields this channel covers:
+   - IT: software development, QA, UI/UX & web design, product/project
+     management in tech, data, AI/machine learning, DevOps/infra.
+   - MARKETING: brand, content & copywriting, SMM & community, PR &
+     communications, performance/digital advertising and SEO.
+   Drop everything else (sales, admin, finance, HR, driving, courses, resumes,
+   non-job posts). A sales or account-management role is NOT marketing.
 2. Merge duplicates: if the same vacancy (same company + same role) appears in
    several sources, keep the one with the better link (prefer job boards over
    Telegram reposts) and output it once.
 3. Pick the ${min}-${max} best of what remains — prefer named companies, clear
    roles, senior/interesting positions, and remote-friendly offers. If fewer than
-   ${min} real tech jobs exist, return only what's real; never pad with non-tech.
-4. Keep a deliberate market mix: choose ${internationalMin}-${internationalMax}
+   ${min} real vacancies exist, return only what's real; never pad.
+4. IT is this channel's main feed and marketing is the newer, smaller one. Pick
+   AT MOST ${config.marketingMax} marketing vacancies and fill every remaining
+   slot with IT. Never return a digest that is mostly marketing.
+5. Keep a deliberate market mix: choose ${internationalMin}-${internationalMax}
    jobs marked "Market: international/remote" when enough such candidates exist,
    and fill the remaining slots with jobs marked "Market: Armenia". If fewer
    than ${internationalMin} international candidates are available, use all that
    are genuinely suitable; never invent or relabel a job's market. Prefer no
    more than one international job per company when other companies are available.
-5. For each pick, output:
+6. For each pick, output:
    - "index": the NUMBER of the candidate (from the numbered list) — required for linking.
    - "title": the job title in English, cleaned up (e.g. "Senior Backend Engineer").
      If the posting is only in Armenian or Russian, translate the title to English.
    - "company": company name as written, or "" if genuinely unknown.
    - "location": city in Armenian (e.g. "Երևան"), or "Հեռավար" if remote-only, or "".
-   - "tag": one of ${TAGS.join(', ')}.
+   - "tag": the role. This becomes the post's role hashtag AND decides which
+     field the post is labelled as, so it has to match the actual job.
+     IT roles: ${tagsOfField('it').join(', ')}.
+     Marketing roles: ${tagsOfField('marketing').join(', ')}.
+     Use "ai" for machine learning, LLM, computer vision and modelling roles,
+     and "data" only for analytics, BI and data-engineering roles that build no
+     models. Use "performance" for SEO, PPC, paid media and digital advertising.
+     Use an "other-" bucket only when none of the specific roles honestly fit,
+     and never use an IT role for a marketing job or the reverse.
 
 Return ONLY JSON matching the schema. No markdown, no commentary.
 
@@ -73,6 +89,55 @@ const pickSchema = {
     },
   },
   required: ['items'],
+};
+
+// A candidate Gemini did not pick arrives with only what the scraper knew. The
+// Armenian boards tag nothing, so the role is derived from the title and the
+// board category. This is also what decides the field, which is why it has to
+// run before anything asks whether a candidate is marketing.
+// The "other" bucket is chosen by the section the job was scraped from, not
+// always 'other-tech'. staff.am category 10 is marketing, and a role there that
+// matched no specific pattern is still a marketing job: bucketing it as IT would
+// put a marketing post out under #IT.
+const MARKETING_SECTION = /marketing|advertis|\bpr\b|copywriting|content|mass media/i;
+
+export const resolveTag = (job) => job.tag
+  || roleTag(job.title, job.category)
+  || (MARKETING_SECTION.test(job.category || '') ? 'other-marketing' : 'other-tech');
+
+const rawPick = (job) => ({
+  ...job,
+  title: (job.title || '').trim(),
+  company: (job.company || '').trim(),
+  location: (job.location || '').trim(),
+  tag: resolveTag(job),
+});
+
+// The prompt asks for at most config.marketingMax marketing picks, but a ceiling
+// this consequential cannot rest on model compliance: one run that returns nine
+// marketing jobs is a channel full of subscribers who joined for IT wondering
+// what happened. Excess marketing is dropped newest-last and the freed slots are
+// refilled from unpicked IT candidates, so the digest keeps its size when it can.
+export const capMarketing = (picked, candidates = [], pickedIds = new Set()) => {
+  const marketing = picked.filter(isMarketing);
+  if (marketing.length <= config.marketingMax) return picked;
+
+  const keep = new Set(marketing.slice(0, config.marketingMax).map((job) => job.id));
+  const trimmed = picked.filter((job) => !isMarketing(job) || keep.has(job.id));
+  const wanted = picked.length - trimmed.length;
+
+  const backfill = [];
+  for (const candidate of candidates) {
+    if (backfill.length >= wanted) break;
+    if (pickedIds.has(candidate.id)) continue;
+    // Resolve the tag before asking the field, or an untagged marketing job from
+    // staff.am would read as IT and get backfilled into the slot just freed.
+    const pick = rawPick(candidate);
+    if (isMarketing(pick)) continue;
+    pickedIds.add(candidate.id);
+    backfill.push(pick);
+  }
+  return [...trimmed, ...backfill];
 };
 
 // Returns curated [{ id, title, company, location, tag, url, source, ... }].
@@ -127,14 +192,6 @@ export const curate = async (jobs) => {
     .slice(0, maxInternational);
   const armenia = curated.filter((job) => job.market !== 'international');
 
-  const rawPick = (job) => ({
-    ...job,
-    title: (job.title || '').trim(),
-    company: (job.company || '').trim(),
-    location: (job.location || '').trim(),
-    tag: job.tag || 'other-tech',
-  });
-
   // Prefer one international job per company. Enforce the minimum here, while
   // allowing Gemini to keep additional strong picks up to the configured max.
   // This avoids exhausting a finite remote feed twice per day.
@@ -167,7 +224,7 @@ export const curate = async (jobs) => {
     }
   }
 
-  return [...international, ...armenia].slice(0, config.digestMax);
+  return capMarketing([...international, ...armenia].slice(0, config.digestMax), jobs, pickedIds);
 };
 
 // ---- Pass 2: one-line Armenian summaries from the enriched detail text. ----
