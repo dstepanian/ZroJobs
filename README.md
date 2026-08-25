@@ -1,18 +1,21 @@
 # ZroJobs
 
 Armenian tech-jobs bot. Twice a day it scrapes Armenian job boards,
-official company/ecosystem boards, public Telegram channels, and curated remote feeds,
-then uses **Gemini Flash** to keep only real tech vacancies, dedupe cross-source
-reposts and summarize each in Armenian. Each vacancy is posted to the Telegram
-channel as **its own message**. Free to run — no server, GitHub Actions cron does
-the scheduling.
+official company/ecosystem boards, public Telegram channels, and curated remote
+feeds. **Gemini Flash** keeps only real tech vacancies, deduplicates cross-source
+reposts, and summarizes each in Armenian. The selected jobs enter a queue, and a
+lightweight workflow publishes **one vacancy every 30 minutes** through the day.
+Free to run — no server, GitHub Actions handles the scheduling.
 
 ```
-staff.am (IT cats) ─┐                                enrich picks
-job.am + LinkedIn   ├─▶ aggregate ─▶ Gemini pick ─▶ (detail pages: ─▶ Gemini ─▶ format ─▶ Telegram
-Remote feeds + TON  ┤    (new only,    (2-4 remote +  salary, descr.,   summarize  (one post (2/day)
-EPAM Armenia        ┤
-t.me/s/<channels>  ─┘     seen.json)   Armenia jobs)   deadline)        (one HY line) per job)
+staff.am + job.am ──┐
+LinkedIn + EPAM ────┤
+Remote feeds + TON ─┼─▶ aggregate/dedupe ─▶ Gemini selects 5–10 jobs
+t.me/s/<channels> ──┘                              │
+                                                   ▼
+detail pages ─▶ salary/deadline/text ─▶ Armenian summary ─▶ queue.json
+                                                                  │
+                                          every 30 minutes ───────┴─▶ Telegram
 ```
 
 ## Why one post per job
@@ -35,7 +38,7 @@ Each post carries the role and company in bold, salary when known, location or
 ⏳ մինչև հուլիսի 31-ը
 Node.js, PostgreSQL, 5+ տարվա փորձ
 
-#IT #Երևան #senior          [ Դիմել ]
+#IT #Երևան #senior · @zrojob          [ Դիմել ]
 ```
 
 The Armenian body is 1–3 short bullets (what you'll work on and the stack, the
@@ -56,6 +59,18 @@ that its deadline is inside three days. Both are computed, never decorative — 
 badge that shows up on everything stops meaning anything. job.am is excluded from
 `🆕` because its listings carry no publication date (the scraper estimates one
 from listing order, which isn't something to stamp "new" on).
+
+## Built-in channel discovery
+
+Every vacancy includes `@zrojob` on its hashtag line. Telegram forwards already
+retain their source, but screenshots shared in WhatsApp, Viber, or elsewhere do
+not; keeping the handle inside the post makes the channel discoverable even when
+Telegram's forwarding header is lost.
+
+Cross-promotion stays out of the high-volume vacancy feed. The pinned intro and
+weekly employer spotlight rotate between `@zroaix` and `@zrocry`, one sibling per
+day, while ordinary job posts show only the ZroJobs handle. The public site links
+to both sibling channels from every page.
 
 ## Curate twice, post all day
 
@@ -107,8 +122,9 @@ you like.
 
 The message explains in Armenian what the channel is, when it posts, which
 hashtags to search, and where an employer submits a vacancy — the handle comes
-from `CONTACT_HANDLE` (falling back to `PROMO_CONTACT`). Run it again after
-editing the copy; Telegram pins the newest message.
+from `CONTACT_HANDLE` (falling back to `PROMO_CONTACT`). It also carries the
+rotating sibling-channel footer. Run it again after editing the copy; Telegram
+pins the newest message.
 
 Easiest way to send it is the **Channel Intro** workflow on the Actions tab
 (`.github/workflows/intro.yml`) — it uses the secrets already in the repo, and
@@ -137,8 +153,9 @@ keep their original link and are credited in the post. When alternatives exist,
 the candidate pool balances every source, and the selector prefers one
 international job per company.
 
-Each successful post appends the posted job ids to `seen.json`; the workflow
-persists it in the Actions cache (pruned after 30 days), so a job is never posted twice.
+Each queued job is added to `seen.json` immediately, so the next curation cannot
+select it again while it is waiting to be published. The workflow persists the
+state in the Actions cache (pruned after 30 days).
 
 ## Sources
 
@@ -170,12 +187,35 @@ structured record in `jobs.json` and published as a static site.
 npm run site   # builds site/ from jobs.json
 ```
 
-Each vacancy gets its own page carrying
+The build produces:
+
+```text
+site/
+├── index.html          current vacancies + Organization/WebSite JSON-LD
+├── jobs/*.html         one crawlable page per vacancy + JobPosting JSON-LD
+├── about/index.html    bilingual channel description + FAQPage JSON-LD
+├── sitemap.xml
+├── robots.txt          search and AI crawler rules
+├── llms.txt            plain-text map for answer engines
+└── CNAME               jobs.zromek.de custom-domain binding
+```
+
+Each vacancy page carries
 [JobPosting](https://developers.google.com/search/docs/appearance/structured-data/job-posting)
 structured data — title, `datePosted`, `validThrough`, hiring organization,
 location (or `TELECOMMUTE` + Armenian applicant eligibility for remote roles) —
 which is what makes a listing eligible for the **Google Jobs** widget above
-normal search results. Plus an index page, `sitemap.xml` and `robots.txt`.
+normal search results.
+
+An answer engine asked what Armenian channels exist cannot use a wall of dated
+pages — it needs one that says what this is. `/about/` is that page: the channel
+in prose, in Armenian and English, with an `Organization` node whose `sameAs` ties
+the domain, the Telegram handle, `zromek.de` and the two sibling sites into one
+entity. It also publishes the Armenian Q&A as `FAQPage` structured data.
+`robots.txt` explicitly permits the main search and AI crawlers, while
+[`llms.txt`](https://llmstxt.org) provides the same core description without the
+HTML. Every page cross-links ZroAIX and ZroCrypto, making all three sites part of
+one discoverable publisher network.
 
 Deliberate choices worth knowing:
 
@@ -195,9 +235,19 @@ Deliberate choices worth knowing:
 run. The published site includes its own `jobs.json`, so if the Actions cache is
 ever evicted the next build recovers the archive from the live site.
 
-**One-time setup:** repo **Settings → Pages → Source: GitHub Actions**. If you
-serve it from a custom domain, set the `SITE_BASE_URL` repo variable to match
-exactly (canonical URLs and the sitemap are absolute).
+**One-time setup:** repo **Settings → Pages → Source: GitHub Actions**, then the
+custom domain. The site lives at **https://jobs.zromek.de/** — a CNAME record
+pointing `jobs` at `dstepanian.github.io`, with the same host in Settings → Pages.
+The build writes `site/CNAME` on every deploy, because a custom domain set only in
+repo settings is dropped the next time an artifact deploys. `SITE_BASE_URL`
+overrides the default only if the host changes; it has to match exactly, since
+canonical URLs and the sitemap are absolute.
+
+The domain matters more here than anywhere else in the three repos: Google Jobs
+eligibility depends on crawlable `JobPosting` pages, and a project-Pages path
+buried `robots.txt` at `/ZroJobs/robots.txt`, where Google never looked. On
+`jobs.zromek.de` it sits at the host root and is read normally. Search Console
+verifies once by DNS at `zromek.de` and covers all three subdomains.
 
 ## Monetization: featured listings
 
@@ -250,8 +300,10 @@ line at the bottom of featured posts.
 | `src/seen.js` | `seen.json` load/mark/prune (30 days) |
 | `src/queue.js` | `queue.json` — enqueue, pop, retry/retire, 36h staleness |
 | `src/archive.js` | `jobs.json` — structured records behind the public site, expiry rules |
-| `src/render.js` | job page / index / sitemap / robots + JobPosting structured data |
-| `src/site.js` | builds `site/` from the archive |
+| `src/about.js` | bilingual About-page and FAQ copy |
+| `src/siblings.js` | shared Zro channel registry, rotating Telegram promo, web cross-links and `sameAs` URLs |
+| `src/render.js` | job/index/About pages, sitemap, robots, `llms.txt` and JSON-LD renderers |
+| `src/site.js` | builds `site/` from the archive and writes the custom-domain `CNAME` |
 | `src/gemini.js` | shared Gemini JSON call (model fallback chain) |
 | `src/curate.js` | Gemini pass 1 (pick/tag/translate) + pass 2 (HY summaries from detail text) |
 | `src/format.js` | per-job post, featured post, hashtags, apply button, intro copy |

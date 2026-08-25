@@ -1,7 +1,7 @@
 import config from './config.js';
 import { aggregate } from './aggregate.js';
 import { archive } from './archive.js';
-import { curate, summarize } from './curate.js';
+import { capMarketing, curate, resolveTag, summarize } from './curate.js';
 import { enrichJobAmJob } from './scrape/jobam.js';
 import { enrichLinkedInJob } from './scrape/linkedin.js';
 import { enrichStaffAmJob } from './scrape/staffam.js';
@@ -52,9 +52,16 @@ const fallbackMix = (candidates) => {
   const armenia = candidates
     .filter((job) => job.market !== 'international')
     .slice(0, Math.max(0, config.digestMax - international.length));
-  return [...international, ...armenia]
+  const picked = [...international, ...armenia]
     .slice(0, config.digestMax)
-    .map((job) => ({ ...job, tag: job.tag || 'other-tech' }));
+    // Only the remote boards tag at scrape time; the Armenian ones carry a raw
+    // category instead. Without this the whole local feed would degrade to
+    // 'other-tech' and lose its role hashtag exactly when Gemini is down.
+    .map((job) => ({ ...job, tag: resolveTag(job) }));
+  // The marketing ceiling is a channel promise, not a curation preference, so it
+  // holds on the uncurated path too. This is the run where it matters most:
+  // nothing has filtered the raw marketing supply, which is the larger feed.
+  return capMarketing(picked, candidates, new Set(picked.map((job) => job.id)));
 };
 
 // Paid listings live in featured.json, not in the job feed, so they get their

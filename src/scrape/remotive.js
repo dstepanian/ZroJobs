@@ -2,11 +2,13 @@ import { decodeEntities, stripHtml } from '../text.js';
 import { isArmeniaAccessible, tagForRole } from './remoteScope.js';
 
 // Remotive publishes a public JSON feed for sharing remote jobs, with the
-// original Remotive link kept on every listing. Keep only technical categories
-// and locations broad enough to be realistic for candidates in Armenia.
+// original Remotive link kept on every listing. Keep only the categories this
+// channel posts and locations broad enough to be realistic for candidates in
+// Armenia.
 const API_URL = 'https://remotive.com/api/remote-jobs?limit=200';
 const MAX_JOBS = 60;
-const TECH_CATEGORY = /software development|design|product|devops|data science|data and analytics|quality assurance|\bqa\b|artificial intelligence|information technology/i;
+// The categories this channel posts: the tech set plus marketing.
+const ACCEPTED_CATEGORY = /software development|design|product|devops|data science|data and analytics|quality assurance|\bqa\b|artificial intelligence|information technology|marketing/i;
 export const fetchRemotive = async () => {
   const res = await fetch(API_URL, {
     headers: { 'user-agent': 'zrojobs/1.0 (+https://t.me/zrojobs)' },
@@ -17,7 +19,7 @@ export const fetchRemotive = async () => {
   const data = await res.json();
   return (Array.isArray(data?.jobs) ? data.jobs : [])
     .filter((job) => job?.id && job?.url && job?.title)
-    .filter((job) => TECH_CATEGORY.test(job.category || ''))
+    .filter((job) => ACCEPTED_CATEGORY.test(job.category || ''))
     .filter((job) => isArmeniaAccessible(job.candidate_required_location || ''))
     .map((job) => {
       const scope = (job.candidate_required_location || '').trim();

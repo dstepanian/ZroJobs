@@ -71,7 +71,11 @@ export const fetchJobAm = async () => {
         // letting undated listings dominate every run forever.
         postedAt: now - (index * ESTIMATED_RECENCY_STEP_MS),
         postedAtEstimated: true, // not a real date — never stamp it 🆕
-        category: 'job.am IT/product',
+        // The listing page does not say which of the requested industries a card
+        // came from, and the request now spans IT and marketing both. Claiming
+        // one here would mislabel half the feed, so the role is read from the
+        // title instead and the category stays empty.
+        category: '',
         salary,
         deadline: parseDeadline(deadlineRaw),
         text: [

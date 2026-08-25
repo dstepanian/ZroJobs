@@ -1,11 +1,17 @@
 import { decodeEntities, stripHtml } from '../text.js';
-import { isArmeniaAccessible, isTechnicalRole, tagForRole } from './remoteScope.js';
+import {
+  isArmeniaAccessible, isMarketingRole, isTechnicalRole, tagForRole,
+} from './remoteScope.js';
 
 const FEEDS = [
   'https://weworkremotely.com/categories/remote-programming-jobs.rss',
   'https://weworkremotely.com/categories/remote-product-jobs.rss',
   'https://weworkremotely.com/categories/remote-design-jobs.rss',
   'https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss',
+  // WWR merged marketing into one feed with sales, and sales is the bulk of it.
+  // That is fine: isMarketingRole below rejects the account-executive listings,
+  // and this channel does not post sales.
+  'https://weworkremotely.com/categories/remote-sales-and-marketing-jobs.rss',
 ];
 const UA = 'Mozilla/5.0 (compatible; zrojobs/1.0; +https://t.me/zrojobs)';
 const MAX_JOBS = 60;
@@ -48,7 +54,9 @@ export const parseWwrFeed = (xml) => xml
     const type = field(item, 'type');
 
     if (!title || !link || !isArmeniaAccessible(region)) return null;
-    if (!isTechnicalRole(title, category)) return null;
+    // The marketing feed is in the list now, so a posting qualifies on either
+    // field. Everything else the feeds carry is still dropped here.
+    if (!isTechnicalRole(title, category) && !isMarketingRole(title, category)) return null;
 
     const slug = new URL(link).pathname.split('/').filter(Boolean).pop();
     return {

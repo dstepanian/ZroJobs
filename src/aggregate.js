@@ -1,4 +1,5 @@
 import { fetchJobs } from './fetchJobs.js';
+import { isSalesRole } from './scrape/remoteScope.js';
 import { loadSeen } from './seen.js';
 
 // A job stays a candidate until it's either posted (seen.json) or too old.
@@ -38,6 +39,12 @@ export const aggregate = async ({ windowMs = WINDOW_MS, cap = 40 } = {}) => {
   const unique = new Map();
   for (const job of await fetchJobs()) {
     if (seen[job.id]) continue;
+    // Adding the marketing sections brought their neighbours along: staff.am and
+    // job.am file account-management and sales roles beside the marketing ones.
+    // This channel does not post sales, so they are dropped here rather than at
+    // the end. Gemini never spends tokens judging them, and the uncurated
+    // fallback path (which does no judging at all) cannot post one by accident.
+    if (isSalesRole(job.title)) continue;
     const jobCutoff = job.candidateWindowMs
       ? Date.now() - job.candidateWindowMs
       : job.market === 'international' ? internationalCutoff : cutoff;
